@@ -1,0 +1,20 @@
+name: Publish to GitHub Pages
+
+# GitHub Pages는 gh-pages 브랜치에서 서비스됨 → main에 푸시하면 gh-pages로 동기화
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Sync main → gh-pages
+        run: git push --force origin HEAD:gh-pages
