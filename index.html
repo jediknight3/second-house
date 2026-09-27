@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#2F6B4F">
+<meta name="color-scheme" content="light dark">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="세컨하우스">
 <title>세컨하우스 건축노트</title>
@@ -1314,7 +1315,8 @@ function showConnectQR() {
     const qr = qrcode(0, 'L');
     qr.addData(connectLink());
     qr.make();
-    box.innerHTML = `<div style="display:inline-block;background:#fff;padding:12px;border-radius:12px">${qr.createSvgTag({ cellSize: 5, margin: 0 })}</div>
+    // 브라우저 자동 다크모드가 색을 바꾸지 않도록 이미지로 그림 (흰 여백 포함)
+    box.innerHTML = `<img src="${qr.createDataURL(6, 4)}" alt="연결 QR" style="width:240px;max-width:100%;image-rendering:pixelated;border-radius:8px;filter:none">
       <div class="faint" style="font-size:12px;margin-top:6px">패드·폰 카메라로 찍으면 바로 연결돼요</div>`;
   };
   if (window.qrcode) return draw();
