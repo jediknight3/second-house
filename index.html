@@ -1279,6 +1279,11 @@ function vSettings() {
           <li>나온 <b>/exec</b> URL을 위 칸에 붙여넣고 저장 (드라이브에 "세컨하우스 DB" 시트가 자동 생성돼요)</li>
         </ol></details>
     </div>
+    ${CFG.gas ? `<div class="card"><div class="card-t">📱 다른 기기 연결</div>
+      <div class="card-s" style="margin:6px 0 12px;line-height:1.6">패드·PC·가족 폰에서 아래 링크를 <b>한 번만 열면</b> 자동으로 연결돼요. URL을 따로 입력할 필요 없어요.<br><span class="red">🔒 이 링크로 모든 데이터를 볼 수 있으니 가족에게만 보내세요.</span></div>
+      <div class="row wrap"><button class="btn p sm" onclick="shareConnect()">🔗 연결 링크 보내기</button><button class="btn sm" onclick="showConnectQR()">▦ QR 코드</button></div>
+      <div id="qrBox" class="mt" style="display:none;text-align:center"></div>
+    </div>` : ''}
     <div class="card"><div class="card-t" style="margin-bottom:10px">💾 백업·내보내기</div>
       <div class="row wrap"><button class="btn sm" onclick="exportJSON()">전체 백업(JSON)</button><button class="btn sm" onclick="document.getElementById('importPick').click()">백업 불러오기</button><button class="btn sm" onclick="exportCSV()">지출내역 CSV(엑셀)</button></div>
       <div class="faint mt" style="font-size:12px">기록 ${COLS.reduce((s, c) => s + (c === 'project' ? 0 : DB[c].length), 0)}건 · 약 ${(bytes / 1024).toFixed(0)}KB (사진 원본 제외)</div>
@@ -1287,6 +1292,56 @@ function vSettings() {
       <div class="card-s" style="margin-bottom:10px">이 기기에 저장된 데이터를 지웁니다. 구글 시트 데이터는 남아있어서 다시 동기화할 수 있어요.</div>
       <button class="btn d sm" onclick="resetLocal()">이 기기 데이터 삭제</button></div>
     <div class="faint right" style="font-size:12px">세컨하우스 건축노트 v${APP_VER}</div>`;
+}
+function connectLink() {
+  return location.origin + location.pathname + '#connect=' + encodeURIComponent(CFG.gas);
+}
+async function shareConnect() {
+  const url = connectLink();
+  const text = '세컨하우스 건축노트 연결 링크 (이 기기에서 한 번 열면 자동 연결)';
+  if (navigator.share) {
+    try { await navigator.share({ title: '세컨하우스 연결', text, url }); return; }
+    catch (e) { if (e && e.name === 'AbortError') return; }
+  }
+  copyText(url, '연결 링크를 복사했어요 — 카톡 "나와의 채팅"으로 보내세요');
+}
+function showConnectQR() {
+  const box = document.getElementById('qrBox');
+  if (!box) return;
+  if (box.style.display === 'block') { box.style.display = 'none'; return; }
+  box.style.display = 'block';
+  const draw = () => {
+    const qr = qrcode(0, 'L');
+    qr.addData(connectLink());
+    qr.make();
+    box.innerHTML = `<div style="display:inline-block;background:#fff;padding:12px;border-radius:12px">${qr.createSvgTag({ cellSize: 5, margin: 0 })}</div>
+      <div class="faint" style="font-size:12px;margin-top:6px">패드·폰 카메라로 찍으면 바로 연결돼요</div>`;
+  };
+  if (window.qrcode) return draw();
+  box.innerHTML = '<div class="faint">QR 코드 만드는 중…</div>';
+  const sc = document.createElement('script');
+  sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js';
+  sc.onload = draw;
+  sc.onerror = () => { box.innerHTML = '<div class="red" style="font-size:13px">QR을 불러오지 못했어요 — 연결 링크 보내기를 사용하세요</div>'; };
+  document.head.appendChild(sc);
+}
+// 연결 링크(#connect=...)로 열었을 때 자동 연결
+async function handleConnectLink() {
+  const m = location.hash.match(/^#connect=(.+)$/);
+  if (!m) return false;
+  history.replaceState(null, '', location.pathname + location.search);
+  let u = '';
+  try { u = decodeURIComponent(m[1]).trim(); } catch (e) {}
+  if (!/^https:\/\/script\.google(usercontent)?\.com\//.test(u)) { toast('연결 링크가 올바르지 않아요', 'err'); return false; }
+  if (CFG.gas === u) { toast('이미 연결된 기기예요'); return false; }
+  if (CFG.gas && !confirm('다른 구글 시트에 연결돼 있어요. 새 링크로 바꿀까요?')) return false;
+  CFG.gas = u; CFG.syncErr = 0;
+  // 이 기기에 아직 올리지 않은 기록이 있으면 함께 올림
+  if (!CFG.lastSync) COLS.forEach(c => DB[c].forEach(rec => PENDING.push({ op: 'upsert', col: c, rec })));
+  await persist();
+  toast('연결됐어요! 데이터를 불러오는 중…');
+  await sync(true);
+  return true;
 }
 async function saveGas() {
   const u = document.getElementById('gasUrl').value.trim();
@@ -1595,7 +1650,7 @@ async function sync(manual) {
 (async function init() {
   await loadState();
   render();
-  if (CFG.gas) sync(false);
+  if (!(await handleConnectLink()) && CFG.gas) sync(false);
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && CFG.gas) sync(false); });
 })();
 </script>
