@@ -1272,11 +1272,11 @@ function vSettings() {
       <div class="faint mt" style="font-size:12px">${CFG.lastSync ? '마지막 동기화: ' + esc(CFG.lastSync) : '아직 동기화 안 됨'}${PENDING.length ? ` · 전송 대기 ${PENDING.length}건` : ''}${DB.file.filter(f => f.local).length ? ` · 업로드 대기 파일 ${DB.file.filter(f => f.local).length}개` : ''}</div>
       <details class="mt"><summary style="cursor:pointer;font-size:14px;font-weight:700">연결 방법 보기</summary>
         <ol style="font-size:13px;line-height:1.8;padding-left:18px;margin-top:8px;color:var(--sub)">
-          <li>구글 드라이브에서 새 <b>구글 시트</b> 만들기 (이름 예: 세컨하우스 DB)</li>
-          <li>확장 프로그램 → <b>Apps Script</b> → 위 "코드 복사"로 복사한 코드를 붙여넣고 저장</li>
-          <li>함수 선택에서 <b>setup</b> 실행 → 권한 승인 (시트·드라이브 접근)</li>
-          <li>배포 → 새 배포 → 유형 <b>웹 앱</b> · 실행: 나 · 액세스: <b>모든 사용자</b> → 배포</li>
-          <li>나온 <b>/exec</b> URL을 위 칸에 붙여넣고 저장</li>
+          <li><b>PC</b>(또는 크롬 "데스크톱 사이트")에서 <b>script.google.com</b> → <b>새 프로젝트</b></li>
+          <li>기존 코드 지우고, 위 "코드 복사"로 복사한 코드 붙여넣기 → 💾 저장</li>
+          <li>위쪽 함수 선택에서 <b>setup</b> → ▶ 실행 → 권한 검토 → 고급 → 이동 → <b>허용</b></li>
+          <li>배포 → 새 배포 → ⚙️ <b>웹 앱</b> · 실행: 나 · 액세스: <b>모든 사용자</b> → 배포</li>
+          <li>나온 <b>/exec</b> URL을 위 칸에 붙여넣고 저장 (드라이브에 "세컨하우스 DB" 시트가 자동 생성돼요)</li>
         </ol></details>
     </div>
     <div class="card"><div class="card-t" style="margin-bottom:10px">💾 백업·내보내기</div>
