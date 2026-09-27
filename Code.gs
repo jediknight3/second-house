@@ -1,7 +1,8 @@
 // ══════════════════════════════════════════════════════════════
 //  세컨하우스 건축노트 — Google Apps Script 백엔드
-//  1) 구글 시트 새로 만들기 → 확장 프로그램 → Apps Script
-//  2) 이 코드 전체 붙여넣기 → 저장
+//  1) script.google.com → 새 프로젝트 (또는 구글 시트 → 확장 프로그램 → Apps Script)
+//  2) 이 코드 전체 붙여넣기 → 저장 → setup 실행 → 권한 허용
+//     (시트 없이 만들었으면 드라이브에 "세컨하우스 DB" 시트가 자동 생성됨)
 //  3) 배포 → 새 배포 → 유형: 웹 앱
 //     - 실행 사용자: 나 / 액세스 권한: 모든 사용자
 //  4) 발급된 /exec URL을 앱 설정 탭에 입력
@@ -63,7 +64,19 @@ function withLock(fn) {
 }
 
 // ── 시트 헬퍼 ──
-function ss() { return SpreadsheetApp.getActiveSpreadsheet(); }
+// 시트에 붙은 스크립트면 그 시트를, 단독 스크립트면 "세컨하우스 DB" 시트를 자동 생성해서 사용
+let _ss = null;
+function ss() {
+  if (_ss) return _ss;
+  const props = PropertiesService.getScriptProperties();
+  const id = props.getProperty('SHEET_ID');
+  if (id) {
+    try { return (_ss = SpreadsheetApp.openById(id)); } catch (e) {}
+  }
+  _ss = SpreadsheetApp.getActiveSpreadsheet() || SpreadsheetApp.create('세컨하우스 DB');
+  props.setProperty('SHEET_ID', _ss.getId());
+  return _ss;
+}
 
 function sheetOf(col) {
   const name = SHEETS[col];
@@ -185,4 +198,5 @@ function upload(body) {
 function setup() {
   Object.keys(SHEETS).forEach(sheetOf);
   folder();
+  Logger.log('시트: ' + ss().getUrl());
 }
