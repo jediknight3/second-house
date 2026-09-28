@@ -61,6 +61,9 @@
   }
 }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+body { overflow-x: hidden; }
+img, svg { max-width: 100%; }
 html, body { background: var(--bg); }
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Pretendard', 'Noto Sans KR', sans-serif;
@@ -136,7 +139,9 @@ a { color: var(--primary); }
 .card-h { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 8px; }
 .card-t { font-size: 16px; font-weight: 800; }
 .card-s { font-size: 13px; color: var(--sub); }
-.grid { display: grid; gap: 12px; }
+.grid { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); }
+.grid > * { min-width: 0; }
+.row > .ellipsis, .between > .ellipsis { min-width: 0; }
 .g2 { grid-template-columns: repeat(2, minmax(0,1fr)); }
 @media (min-width: 768px) {
   .g4 { grid-template-columns: repeat(4, minmax(0,1fr)); }
@@ -216,10 +221,11 @@ a { color: var(--primary); }
 .empty .e { font-size: 36px; margin-bottom: 6px; }
 
 .search {
+  display: block; -webkit-appearance: none; appearance: none; color: var(--text);
   width: 100%; border: 1px solid var(--border); background: var(--card); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px;
 }
 .filters { display: flex; gap: 8px; margin-bottom: 10px; }
-.filters select { flex: 1; min-width: 0; border: 1px solid var(--border); background: var(--card); border-radius: 10px; padding: 9px 10px; font-size: 14px; }
+.filters select { flex: 1; min-width: 0; border: 1px solid var(--border); background-color: var(--card); color: var(--text); border-radius: 10px; padding: 9px 10px; font-size: 14px; }
 
 /* ── 사진 그리드 ── */
 .pgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
@@ -244,13 +250,15 @@ a { color: var(--primary); }
 }
 @keyframes fadein { from { opacity: 0; } }
 .sheet {
-  background: var(--card); width: 100%; max-width: 640px; max-height: 92vh; overflow-y: auto; border-radius: 20px 20px 0 0;
+  background: var(--card); width: 100%; max-width: 640px; max-height: 92vh; max-height: 92dvh; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; border-radius: 20px 20px 0 0;
   padding: 8px 20px calc(20px + env(safe-area-inset-bottom)); animation: up .2s ease-out;
 }
 @keyframes up { from { transform: translateY(40px); opacity: .5; } }
 @media (min-width: 768px) {
-  .sheet-bg { align-items: center; }
-  .sheet { border-radius: 20px; padding-bottom: 24px; }
+  .sheet-bg { align-items: center; padding: 24px; }
+  .sheet { border-radius: 20px; padding: 8px 28px 24px; max-height: calc(100vh - 48px); max-height: calc(100dvh - 48px); }
+  .view { padding: 20px 24px; }
+  .bnav button { font-size: 12px; }
 }
 .sheet .grab { width: 40px; height: 4px; border-radius: 2px; background: var(--border); margin: 4px auto 12px; }
 .sheet-h { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; gap: 8px; }
@@ -259,16 +267,32 @@ a { color: var(--primary); }
 .fld label { display: block; font-size: 13px; font-weight: 700; color: var(--sub); margin-bottom: 6px; }
 .fld label .req { color: var(--red); }
 .fld input, .fld select, .fld textarea {
-  width: 100%; border: 1px solid var(--border); background: var(--soft); border-radius: 10px; padding: 11px 12px; outline: none;
+  display: block; width: 100%; max-width: 100%; min-width: 0; min-height: 46px;
+  border: 1px solid var(--border); background-color: var(--soft); border-radius: 10px; padding: 11px 12px; outline: none;
+  -webkit-appearance: none; appearance: none; line-height: 1.35;
+}
+/* iOS Safari: 날짜·시간 칸이 고유 폭을 고집해 칸 밖으로 넘치는 문제 */
+.fld input[type=date], .fld input[type=time] { text-align: left; }
+.fld input::-webkit-date-and-time-value { text-align: left; margin: 0; }
+.fld input::-webkit-datetime-edit { padding: 0; }
+.fld input[type=checkbox], .fld input[type=range] { -webkit-appearance: auto; appearance: auto; min-height: 0; }
+/* select 기본 화살표를 없앴으니 직접 그림 */
+.fld select, .filters select {
+  -webkit-appearance: none; appearance: none; padding-right: 34px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%239AA29D' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 12px center; background-size: 12px 8px;
+  text-overflow: ellipsis; white-space: nowrap; overflow: hidden;
 }
 .fld input:focus, .fld select:focus, .fld textarea:focus { border-color: var(--primary); background: var(--card); }
 .fld textarea { min-height: 84px; resize: vertical; line-height: 1.5; }
 .fld .hint { font-size: 12px; color: var(--faint); margin-top: 4px; }
-.frow { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.frow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+.frow > .fld { min-width: 0; }
+@media (max-width: 340px) { .frow { grid-template-columns: minmax(0, 1fr); gap: 0; } }
 .sheet-btns { display: flex; gap: 8px; margin-top: 18px; }
 .sheet-btns .btn { flex: 1; justify-content: center; padding: 14px; }
 
-.dl { display: grid; grid-template-columns: 96px 1fr; gap: 8px 12px; font-size: 14px; }
+.dl { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 8px 12px; font-size: 14px; }
 .dl dt { color: var(--sub); font-weight: 600; }
 .dl dd { word-break: break-word; }
 .sec-t { font-size: 14px; font-weight: 800; margin: 18px 0 8px; }
@@ -312,13 +336,13 @@ a { color: var(--primary); }
 
 /* 간트 */
 .gantt { position: relative; margin-top: 8px; }
-.gantt .gr { display: grid; grid-template-columns: 110px 1fr; align-items: center; gap: 8px; height: 30px; }
+.gantt .gr { display: grid; grid-template-columns: 110px minmax(0, 1fr); align-items: center; gap: 8px; height: 30px; }
 .gantt .gn { font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .gantt .gt { position: relative; height: 16px; background: var(--soft); border-radius: 4px; }
 .gantt .gb { position: absolute; top: 0; bottom: 0; border-radius: 4px; background: var(--faint); overflow: hidden; }
 .gantt .gb > i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--primary); }
 .gantt .today { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--red); z-index: 1; }
-.gantt .gx { display: grid; grid-template-columns: 110px 1fr; gap: 8px; font-size: 11px; color: var(--faint); margin-top: 4px; }
+.gantt .gx { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 8px; font-size: 11px; color: var(--faint); margin-top: 4px; }
 
 .check { width: 22px; height: 22px; border-radius: 6px; border: 2px solid var(--border); flex-shrink: 0; display: flex; align-items: center; justify-content: center; cursor: pointer; background: var(--card); color: #fff; font-size: 13px; }
 .check.on { background: var(--green); border-color: var(--green); }
@@ -724,9 +748,10 @@ function vHome() {
   // 공정
   const ph = sortedPhases();
   const active = ph.filter(x => x.status === '진행중');
-  const next = ph.find(x => x.status === '예정');
+  const homePh = [...new Set([...active.slice(0, 3), ...ph.filter(x => x.status === '예정').slice(0, active.length ? 1 : 2)])];
+  if (!homePh.length && ph.length) homePh.push(ph[ph.length - 1]);
   h += `<div class="card" onclick="go('phase')" style="cursor:pointer"><div class="card-h"><div class="card-t">🏗️ 공정</div><span class="card-s">${ph.filter(x => x.status === '완료').length}/${ph.length} 완료</span></div>` +
-    (ph.length ? (active.length ? active : ph.slice(0, 1)).concat(next && !active.includes(next) ? [next] : []).slice(0, 4).map(x => phaseRow(x)).join('') : `<div class="empty">공정이 없어요<br><button class="btn sm p mt" onclick="event.stopPropagation();loadPhaseTemplate()">기본 공정 불러오기</button></div>`) +
+    (ph.length ? (dupPhaseCount() ? `<div class="badge r" style="margin-bottom:10px">중복 공정 ${dupPhaseCount()}개 — 공정 탭에서 정리하세요</div>` : '') + homePh.map(x => phaseRow(x)).join('') : `<div class="empty">공정이 없어요<br><button class="btn sm p mt" onclick="event.stopPropagation();loadPhaseTemplate()">기본 공정 불러오기</button></div>`) +
     `</div>`;
   h += `</div>`;
 
@@ -909,6 +934,7 @@ function vPhase() {
   const prog = phaseProgress();
   let h = `<div class="card"><div class="between"><div><div class="card-t">전체 진행률</div><div class="card-s">${ph.filter(x => x.status === '완료').length}/${ph.length} 단계 완료</div></div><div style="font-size:28px;font-weight:800;color:var(--primary)">${prog.toFixed(0)}%</div></div>
     <div class="bar lg mt"><i style="width:${prog}%;background:var(--primary)"></i></div></div>`;
+  if (dupPhaseCount()) h += `<div class="card between" style="background:var(--yellow-l)"><div style="font-size:14px"><b>같은 이름의 공정이 ${dupPhaseCount()}개 중복돼 있어요</b><div class="card-s">여러 기기에서 기본 공정을 불러오면 생길 수 있어요</div></div><button class="btn p sm" onclick="runDedupe()">정리하기</button></div>`;
   if (!ph.length) return h + `<div class="card"><div class="empty"><div class="e">🏗️</div>공정을 등록해서 진행 상황을 관리하세요<br><button class="btn p sm mt" onclick="loadPhaseTemplate()">기본 공정 13단계 불러오기</button> <button class="btn sm mt" onclick="openForm('phase')">직접 추가</button></div></div>`;
 
   // 간트
@@ -939,11 +965,45 @@ function vPhase() {
   return h;
 }
 function loadPhaseTemplate() {
-  if (DB.phase.length && !confirm('기존 공정에 기본 공정 13단계를 추가할까요?')) return;
-  const base = DB.phase.length ? Math.max(...DB.phase.map(x => num(x.order))) : 0;
-  PHASE_TEMPLATE.forEach((n, i) => upsert('phase', { name: n, order: base + i + 1, status: '예정', progress: 0 }));
+  const have = new Set(DB.phase.map(x => (x.name || '').trim()));
+  const add = PHASE_TEMPLATE.filter(n => !have.has(n));
+  if (!add.length) { toast('기본 공정이 이미 모두 있어요'); return go('phase'); }
+  if (DB.phase.length && !confirm(`없는 기본 공정 ${add.length}개를 추가할까요?`)) return;
+  add.forEach(n => upsert('phase', { name: n, order: PHASE_TEMPLATE.indexOf(n) + 1, status: '예정', progress: 0 }));
   toast('기본 공정을 불러왔어요 — 각 공정을 눌러 일정을 입력하세요');
   go('phase');
+}
+function dupPhaseCount() {
+  const seen = new Set(); let n = 0;
+  DB.phase.forEach(x => { const k = (x.name || '').trim(); if (seen.has(k)) n++; else seen.add(k); });
+  return n;
+}
+// 같은 이름 공정을 하나로 합침 — 입력된 정보가 가장 많은 것을 남기고, 연결된 지출·사진·할일은 남는 공정으로 옮김
+function dedupePhases() {
+  const groups = {};
+  DB.phase.forEach(x => { const k = (x.name || '').trim(); (groups[k] = groups[k] || []).push(x); });
+  const links = id => DB.expense.filter(e => e.phaseId === id).length + DB.file.filter(f => f.phaseId === id).length + DB.todo.filter(t => t.phaseId === id).length;
+  const score = x => (num(x.progress) > 0) * 4 + (x.status !== '예정') * 4 + !!x.start + !!x.end + !!x.memo + links(x.id) * 2;
+  let removed = 0;
+  Object.values(groups).filter(g => g.length > 1).forEach(g => {
+    g.sort((a, b) => score(b) - score(a) || (b.updated || '').localeCompare(a.updated || ''));
+    const keep = Object.assign({}, g[0]);
+    g.slice(1).forEach(d => {
+      ['start', 'end', 'memo'].forEach(k => { if (!keep[k] && d[k]) keep[k] = d[k]; });
+      if (num(d.progress) > num(keep.progress)) { keep.progress = num(d.progress); keep.status = d.status; }
+      [['expense', 'phaseId'], ['file', 'phaseId'], ['todo', 'phaseId']].forEach(([c, k]) =>
+        DB[c].filter(r => r[k] === d.id).forEach(r => upsert(c, Object.assign({}, r, { [k]: keep.id }))));
+      removeRec('phase', d.id); removed++;
+    });
+    upsert('phase', keep);
+  });
+  return removed;
+}
+function runDedupe() {
+  const n = dupPhaseCount();
+  if (!n || !confirm(`같은 이름의 공정 ${n}개를 하나로 합칠까요?\n(입력된 일정·진행률·연결된 지출/사진은 유지돼요)`)) return;
+  const r = dedupePhases();
+  render(); toast(`중복 공정 ${r}개를 정리했어요`);
 }
 function openPhase(id) {
   const x = byId('phase', id); if (!x) return;
