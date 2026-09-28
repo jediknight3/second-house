@@ -287,6 +287,10 @@ a { color: var(--primary); }
 .fld input:focus, .fld select:focus, .fld textarea:focus { border-color: var(--primary); background: var(--card); }
 .fld textarea { min-height: 84px; resize: vertical; line-height: 1.5; }
 .fld .hint { font-size: 12px; color: var(--faint); margin-top: 4px; }
+.area2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+.unit { position: relative; min-width: 0; }
+.unit input { padding-right: 40px !important; }
+.unit span { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); color: var(--faint); font-size: 14px; font-weight: 600; pointer-events: none; }
 .frow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
 .frow > .fld { min-width: 0; }
 @media (max-width: 340px) { .frow { grid-template-columns: minmax(0, 1fr); gap: 0; } }
@@ -401,7 +405,7 @@ table.tb tr.click { cursor: pointer; }
 
 <script>
 'use strict';
-const APP_VER = '1.0.0';
+const APP_VER = '1.1.0';
 
 /* ═══════════════════ 상수 ═══════════════════ */
 const COLS = ['project','phase','budget','expense','vendor','meeting','todo','file'];
@@ -436,8 +440,10 @@ const F = {
   project: [
     { k:'name', l:'프로젝트 이름', t:'text', ph:'예) 양평 세컨하우스' },
     { k:'address', l:'대지 주소', t:'text' },
-    { k:'landArea', l:'대지면적(㎡)', t:'number', half:1 },
-    { k:'floorArea', l:'연면적(㎡)', t:'number', half:1 },
+    { k:'saleArea', l:'분양면적', t:'area' },
+    { k:'roadShare', l:'도로지분', t:'area' },
+    { k:'exclArea', l:'전용면적', t:'area' },
+    { k:'floorArea', l:'연면적 (건물 바닥면적 합계)', t:'area' },
     { k:'totalBudget', l:'총 예산(원)', t:'money' },
     { k:'startDate', l:'착공(예정)일', t:'date', half:1 },
     { k:'targetDate', l:'입주 목표일', t:'date', half:1 },
@@ -573,7 +579,7 @@ const num = v => { const n = Number(String(v == null ? '' : v).replace(/,/g, '')
 
 function norm(col, r) {
   (F[col] || []).forEach(f => {
-    if ((f.t === 'money' || f.t === 'number') && r[f.k] !== undefined && r[f.k] !== '') r[f.k] = num(r[f.k]);
+    if ((f.t === 'money' || f.t === 'number' || f.t === 'area') && r[f.k] !== undefined && r[f.k] !== '') r[f.k] = num(r[f.k]);
   });
   if (col === 'file') r.local = r.local === true || r.local === 'true' || r.local === 1 || r.local === '1' ? 1 : 0;
   return r;
@@ -615,6 +621,7 @@ const sortedPhases = () => [...DB.phase].sort((a,b) => (num(a.order) - num(b.ord
 
 /* ═══════════════════ 포맷 ═══════════════════ */
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+const fmtA = n => { const x = Math.round(num(n) * 100) / 100; return x.toLocaleString('ko-KR', { maximumFractionDigits: 2 }); };
 const fmtN = n => Math.round(num(n)).toLocaleString('ko-KR');
 function fmtW(n) {
   n = num(n); const a = Math.abs(n), sg = n < 0 ? '-' : '';
@@ -773,6 +780,13 @@ function vHome() {
   feed.sort((a, b) => (b.u || '').localeCompare(a.u || ''));
   if (feed.length) h += `<div class="card"><div class="card-h"><div class="card-t">🕘 최근 기록</div></div><div class="list">${feed.slice(0, 8).map(f => `<div class="it" onclick="${f.on}"><div class="ico">${f.ic}</div><div class="grow"><div class="t ellipsis">${esc(f.t)}</div><div class="s ellipsis">${esc(f.s)}</div></div><div class="faint" style="font-size:12px">${relTime(f.u)}</div></div>`).join('')}</div></div>`;
   return h;
+}
+function areaSummary(p) {
+  const land = num(p.exclArea) || num(p.saleArea) || num(p.landArea);
+  const parts = [['분양', p.saleArea], ['전용', p.exclArea || p.landArea], ['도로지분', p.roadShare], ['연면적', p.floorArea]]
+    .filter(([, v]) => num(v) > 0).map(([l, v]) => `${l} ${fmtA(num(v) / PY)}평`);
+  if (land && num(p.floorArea)) parts.push(`용적률 ${(num(p.floorArea) / land * 100).toFixed(1)}%`);
+  return parts.length ? `<div class="faint mt" style="font-size:12px">${parts.join(' · ')}</div>` : '';
 }
 function floorPy() { const a = num(proj().floorArea); return a > 0 ? a / PY : 0; }
 function ddayLabel(d) { const n = daysBetween(today(), d); return n === 0 ? '오늘' : n > 0 ? 'D-' + n : (-n) + '일 지남'; }
@@ -1325,7 +1339,7 @@ function vSettings() {
   const bytes = JSON.stringify(DB).length;
   return `<div class="card"><div class="card-h"><div class="card-t">🏡 프로젝트 정보</div><button class="btn sm" onclick="openForm('project','main')">수정</button></div>
       ${dlHtml('project', p, [])}${!p.name ? '<div class="faint" style="font-size:13px">프로젝트 정보를 입력하세요</div>' : ''}
-      ${num(p.landArea) || num(p.floorArea) ? `<div class="faint mt" style="font-size:12px">대지 ${(num(p.landArea) / PY).toFixed(1)}평 · 연면적 ${(num(p.floorArea) / PY).toFixed(1)}평${num(p.landArea) && num(p.floorArea) ? ' · 용적률 ' + (num(p.floorArea) / num(p.landArea) * 100).toFixed(1) + '%' : ''}</div>` : ''}
+      ${areaSummary(p)}
     </div>
     <div class="card"><div class="card-t">☁️ 구글 시트 동기화</div>
       <div class="card-s" style="margin:6px 0 12px;line-height:1.6">구글 시트 + Apps Script를 연결하면 폰·패드·PC 어디서든 같은 데이터를 보고, 사진·도면 원본은 내 구글 드라이브 <b>세컨하우스_자료</b> 폴더에 보관돼요.</div>
@@ -1470,6 +1484,12 @@ function fieldHtml(f, v) {
     const opts = f.t === 'ref' ? [['', '- 선택 안함 -'], ...refOpts(f.ref)] : (typeof f.opts === 'function' ? f.opts() : f.opts).map(o => [o, o || '-']);
     if (v && !opts.some(o => o[0] === v)) opts.push([v, f.t === 'ref' ? '(삭제됨)' : v]);
     inp = `<select id="${id}">${f.t === 'select' && !f.def && !opts.some(o => o[0] === '') ? '<option value="">- 선택 -</option>' : ''}${opts.map(([k, l]) => `<option value="${esc(k)}" ${String(v) === String(k) ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
+  } else if (f.t === 'area') {
+    const m2 = v === '' ? '' : fmtA(v), py = v === '' ? '' : fmtA(num(v) / PY);
+    inp = `<div class="area2">
+      <div class="unit"><input id="${id}" data-area="m2" data-pair="${id}_py" inputmode="decimal" autocomplete="off" value="${m2}" placeholder="0"><span>㎡</span></div>
+      <div class="unit"><input id="${id}_py" data-area="py" data-pair="${id}" inputmode="decimal" autocomplete="off" value="${py}" placeholder="0" aria-label="${f.l} 평"><span>평</span></div>
+    </div>${f.k === 'exclArea' ? `<div class="hint" id="areaSum"></div>` : ''}`;
   } else if (f.t === 'textarea') {
     inp = `<textarea id="${id}" placeholder="${esc(f.ph || '')}">${esc(v)}</textarea>`;
   } else if (f.t === 'money') {
@@ -1496,6 +1516,7 @@ function openForm(col, id, preset) {
   const exist = id ? byId(col, id) : null;
   const rec = exist ? Object.assign({}, exist) : Object.assign({}, preset || {});
   if (col === 'project' && !exist) rec.id = 'main';
+  if (col === 'project' && rec.landArea && !rec.exclArea) rec.exclArea = rec.landArea;
   if (!exist) F[col].forEach(f => { if (rec[f.k] === undefined && f.def !== undefined) rec[f.k] = typeof f.def === 'function' ? f.def() : f.def; });
   if (col === 'expense' && !exist && !rec.category && rec.vendorId) {
     const last = DB.expense.filter(e => e.vendorId === rec.vendorId).sort((a, b) => (b.date || '').localeCompare(a.date || ''))[0];
@@ -1515,8 +1536,17 @@ function openForm(col, id, preset) {
       else if (vd && vd.field) { const guess = { '설계사무소': '설계·감리', '감리': '설계·감리', '토목': '토목·기초', '골조': '골조', '전기': '전기·통신', '설비': '설비(배관·냉난방)', '창호': '창호', '인테리어': '내장·마감', '조경': '조경·외부', '측량': '인허가·세금', '법무·세무': '인허가·세금', '금융': '금융비용', '공인중개': '토지' }[vd.field]; if (guess && !c.value) c.value = guess; }
     });
   }
+  if (col === 'project') updateAreaSum();
   const first = document.querySelector('.sheet input:not([type=date]):not([type=checkbox]), .sheet textarea');
   if (first && window.innerWidth >= 1024) first.focus();
+}
+function updateAreaSum() {
+  const el = document.getElementById('areaSum'); if (!el) return;
+  const g = id => { const x = document.getElementById(id); return x ? num(x.value) : 0; };
+  const sale = g('f_saleArea'), road = g('f_roadShare'), excl = g('f_exclArea');
+  if (!excl && !road) { el.textContent = ''; return; }
+  const sum = excl + road;
+  el.innerHTML = `전용 + 도로지분 = ${fmtA(sum)}㎡ (${fmtA(sum / PY)}평)` + (sale ? (Math.abs(sum - sale) < 0.05 ? ' · <span class="green">분양면적과 일치 ✓</span>' : ` · 분양면적과 ${fmtA(sale - sum)}㎡ 차이`) : '');
 }
 function readForm(col) {
   const o = {};
@@ -1525,7 +1555,7 @@ function readForm(col) {
     if (!el) return;
     let v = el.value.trim();
     if (f.t === 'money') v = v === '' ? '' : num(v);
-    else if (f.t === 'number') v = v === '' ? '' : num(v);
+    else if (f.t === 'number' || f.t === 'area') v = v === '' ? '' : num(v);
     o[f.k] = v;
   });
   return o;
@@ -1563,10 +1593,10 @@ function dlHtml(col, r, skip) {
     else if (f.t === 'tel') v = `<a href="tel:${esc(v)}">${esc(v)}</a>`;
     else if (f.t === 'email') v = `<a href="mailto:${esc(v)}">${esc(v)}</a>`;
     else if (f.t === 'textarea') v = `<span class="pre">${esc(v)}</span>`;
-    else if (/㎡/.test(f.l)) v = `${esc(v)}㎡ <span class="faint">(${(num(v) / PY).toFixed(1)}평)</span>`;
+    else if (f.t === 'area') v = `${fmtA(v)}㎡ <span class="faint">(${fmtA(num(v) / PY)}평)</span>`;
     else if (/%/.test(f.l)) v = `${esc(v)}%`;
     else v = esc(v);
-    return `<dt>${f.l.replace(/\(.*\)/, '')}</dt><dd>${v}</dd>`;
+    return `<dt>${f.l.replace(/\s*\(.*\)/, '')}</dt><dd>${v}</dd>`;
   });
   return rows.length ? `<dl class="dl">${rows.join('')}</dl>` : '';
 }
@@ -1624,6 +1654,16 @@ function download(name, content, type) {
 }
 document.addEventListener('input', e => {
   const t = e.target;
+  if (t.dataset && t.dataset.area) {
+    // ㎡ ↔ 평 자동 변환 (숫자와 소수점만 허용)
+    let v = t.value.replace(/[^0-9.]/g, '');
+    const i = v.indexOf('.'); if (i >= 0) v = v.slice(0, i + 1) + v.slice(i + 1).replace(/\./g, '');
+    if (v !== t.value) t.value = v;
+    const pair = document.getElementById(t.dataset.pair);
+    if (pair) pair.value = v === '' ? '' : fmtA(t.dataset.area === 'm2' ? num(v) / PY : num(v) * PY).replace(/,/g, '');
+    updateAreaSum();
+    return;
+  }
   if (!t.classList || !t.classList.contains('money')) return;
   const neg = t.value.trim().startsWith('-');
   const digits = t.value.replace(/[^0-9]/g, '');
