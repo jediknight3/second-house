@@ -380,6 +380,8 @@ table.itb td { padding: 6px 4px; }
 .cell { width: 100%; min-width: 0; border: 1px solid transparent; background: var(--soft); border-radius: 8px; padding: 7px 8px; font-size: 14px; text-align: right; -webkit-appearance: none; appearance: none; color: var(--text); font-variant-numeric: tabular-nums; }
 select.cell { text-align: left; padding-right: 6px; }
 .cell:focus { outline: none; border-color: var(--primary); background: var(--card); }
+table.tb td.num, table.tb th { white-space: nowrap; }
+@media (max-width: 480px) { table.tb { font-size: 13px; } table.tb td, table.tb th { padding-left: 4px; padding-right: 4px; } }
 table.tb { width: 100%; border-collapse: collapse; font-size: 14px; }
 table.tb th { text-align: left; font-size: 12px; color: var(--sub); font-weight: 700; padding: 8px 6px; border-bottom: 1px solid var(--border); }
 table.tb td { padding: 10px 6px; border-bottom: 1px solid var(--border); vertical-align: middle; }
@@ -409,12 +411,12 @@ table.tb tr.click { cursor: pointer; }
 
 <script>
 'use strict';
-const APP_VER = '1.3.0';
+const APP_VER = '1.4.0';
 
 /* ═══════════════════ 상수 ═══════════════════ */
-const COLS = ['project','phase','budget','expense','vendor','meeting','todo','file','item'];
+const COLS = ['project','phase','budget','expense','vendor','meeting','todo','file','item','loan'];
 // 구매리스트(item)는 기존 Apps Script를 다시 배포하지 않아도 되도록 '예산' 시트에 _t:'item' 표시로 함께 저장
-const SERVER_COL = { item: 'budget' };
+const SERVER_COL = { item: 'budget', loan: 'budget' };
 const CATS = ['토지','설계·감리','인허가·세금','토목·기초','골조','지붕','창호','단열·방수','전기·통신','설비(배관·냉난방)','내장·마감','외장','주방·욕실','조경·외부','가구·가전','인입(전기·수도·가스)','금융비용','기타'];
 const PHASE_TEMPLATE = ['토지 매입','설계','인허가','착공 준비','토목·기초','골조','지붕·외벽','창호','설비·전기','내장 마감','조경·외부','준공·사용승인','입주'];
 const FILE_KINDS = ['현장사진','도면','계약서','견적서','영수증','인허가','참고이미지','기타'];
@@ -476,6 +478,7 @@ const F = {
     { k:'exclArea', l:'전용면적', t:'area' },
     { k:'floorArea', l:'연면적 (건물 바닥면적 합계)', t:'area' },
     { k:'totalBudget', l:'총 예산(원)', t:'money' },
+    { k:'cashReady', l:'준비된 현금 (자기자금)', t:'money', hint:'공사에 쓸 수 있도록 마련해 둔 현금 — 자금계획에서 부족/여유를 계산해요' },
     { k:'startDate', l:'착공(예정)일', t:'date', half:1 },
     { k:'targetDate', l:'입주 목표일', t:'date', half:1 },
     { k:'memo', l:'메모', t:'textarea' },
@@ -488,8 +491,18 @@ const F = {
     { k:'category', l:'분류', t:'select', opts:()=>cats(), req:1 },
     { k:'vendorId', l:'업체', t:'ref', ref:'vendor', half:1 },
     { k:'phaseId', l:'공정', t:'ref', ref:'phase', half:1 },
-    { k:'payMethod', l:'결제수단', t:'select', opts:PAY },
+    { k:'fund', l:'자금', t:'fund', def:'cash', half:1 },
+    { k:'payMethod', l:'결제수단', t:'select', opts:PAY, half:1 },
     { k:'memo', l:'메모', t:'textarea' },
+  ],
+  loan: [
+    { k:'name', l:'대출명', t:'text', req:1, ph:'예) 토지담보대출, 건축자금대출' },
+    { k:'bank', l:'금융기관', t:'text', half:1 },
+    { k:'rate', l:'금리(%)', t:'number', half:1 },
+    { k:'limit', l:'승인 한도(원)', t:'money', req:1 },
+    { k:'date', l:'실행(예정)일', t:'date', half:1 },
+    { k:'term', l:'기간(년)', t:'number', half:1 },
+    { k:'memo', l:'메모', t:'textarea', ph:'상환 방식, 중도상환수수료, 담당자 등' },
   ],
   budget: [
     { k:'category', l:'분류', t:'select', opts:()=>cats(), req:1 },
@@ -564,7 +577,7 @@ const F = {
     { k:'memo', l:'메모', t:'textarea' },
   ],
 };
-const TITLES = { project:'프로젝트 정보', expense:'지출', budget:'예산', phase:'공정', vendor:'업체', meeting:'미팅', todo:'할일', file:'자료', item:'구매 항목' };
+const TITLES = { project:'프로젝트 정보', expense:'지출', budget:'예산', phase:'공정', vendor:'업체', meeting:'미팅', todo:'할일', file:'자료', item:'구매 항목', loan:'대출' };
 
 /* ═══════════════════ 저장소 (IndexedDB) ═══════════════════ */
 const IDB = {
@@ -790,6 +803,7 @@ function vHome() {
       <div class="kpi"><div class="l">평당 건축비</div><div class="v">${bld ? fmtW(buildCost / bld) : '-'}</div><div class="s">${bld ? '토지 제외 · 연면적 ' + bld.toFixed(1) + '평' : '연면적 입력 시 계산'}</div></div>
     </div>
     ${t.budget ? `<div class="bar lg mt"><i style="width:${used}%;background:var(--primary)"></i><i style="width:${plan}%;background:var(--accent);opacity:.6"></i><i style="width:${Math.min(100 - used - plan, pct(t.listRemain, t.budget))}%;background:var(--blue);opacity:.45"></i></div>` : ''}
+    ${fundHomeLine()}
     ${t.listRemain ? `<div class="between mt" style="font-size:13px"><span class="muted">🛒 구매리스트 남은 예상 <b style="color:var(--blue)">${fmtW(t.listRemain)}</b></span><span>예상 총비용 <b class="${t.budget && t.forecast > t.budget ? 'red' : ''}">${fmtW(t.forecast)}</b>${t.budget ? ` <span class="faint">(예산의 ${(t.forecast / t.budget * 100).toFixed(0)}%)</span>` : ''}</span></div>` : ''}
   </div>`;
 
@@ -860,10 +874,11 @@ const vendorBadge = s => `<span class="badge ${{ '계약': 'p', '진행중': 'b'
 
 /* ═══════════════════ 비용 ═══════════════════ */
 function vCost() {
-  const tabs = [['list', '지출 내역'], ['items', '구매리스트'], ['budget', '예산'], ['analysis', '분석']];
+  const tabs = [['list', '지출 내역'], ['items', '구매리스트'], ['fund', '자금계획'], ['budget', '예산'], ['analysis', '분석']];
   let h = `<div class="tabs">${tabs.map(([k, l]) => `<button class="${S.cost === k ? 'on' : ''}" onclick="S.cost='${k}';render()">${l}</button>`).join('')}</div>`;
   if (S.cost === 'budget') return h + vBudget();
   if (S.cost === 'items') return h + vItems();
+  if (S.cost === 'fund') return h + vFund();
   if (S.cost === 'analysis') return h + vAnalysis();
 
   const t = costTotals();
@@ -904,7 +919,7 @@ function expenseRow(e) {
   return `<div class="it" onclick="openExpense('${e.id}')">
     <div class="ico">${catIcon(e.category)}</div>
     <div class="grow"><div class="t ellipsis">${esc(e.title)}${att ? ' <span class="faint" style="font-size:12px">📎' + att + '</span>' : ''}</div>
-    <div class="s ellipsis">${fmtMD(e.date)} · ${esc(e.category || '')}${e.vendorId ? ' · ' + esc(refName('vendor', e.vendorId)) : ''}</div></div>
+    <div class="s ellipsis">${isLoanFund(fundOf(e)) ? '<span style="color:var(--blue)">🏦 대출</span> · ' : ''}${fmtMD(e.date)} · ${esc(e.category || '')}${e.vendorId ? ' · ' + esc(refName('vendor', e.vendorId)) : ''}</div></div>
     <div><div class="amt" style="${pl ? 'color:var(--accent)' : ''}">${fmtN(e.amount)}</div>${pl ? '<div class="right"><span class="badge a">예정</span></div>' : ''}</div>
   </div>`;
 }
@@ -920,7 +935,7 @@ function vBudget() {
   if (num(proj().totalBudget) && t.catBudget && Math.abs(num(proj().totalBudget) - t.catBudget) >= 1) {
     h += `<div class="card box" style="background:var(--yellow-l);color:var(--text);font-size:13px">총 예산 ${fmtW(proj().totalBudget)} · 분류별 예산 합계 ${fmtW(t.catBudget)} → 미배정 <b>${fmtW(num(proj().totalBudget) - t.catBudget)}</b></div>`;
   }
-  if (t.listRemain) h += `<div class="card"><div class="between"><div><div class="card-t">예상 총비용</div><div class="card-s">지급완료 ${fmtW(t.paid)} + 지급예정 ${fmtW(t.planned)} + 구매리스트 남은 예상 ${fmtW(t.listRemain)}</div></div><div class="right"><div style="font-size:22px;font-weight:800" class="${t.budget && t.forecast > t.budget ? 'red' : ''}">${fmtW(t.forecast)}</div>${t.budget ? `<div class="card-s">예산 대비 ${t.forecast > t.budget ? '초과 ' + fmtW(t.forecast - t.budget) : '여유 ' + fmtW(t.budget - t.forecast)}</div>` : ''}</div></div></div>`;
+  if (t.listRemain) h += `<div class="card"><div class="between"><div><div class="card-t">예상 총비용</div><div class="card-s">지급완료 ${fmtW(t.paid)} + 지급예정 ${fmtW(t.planned)} + 구매리스트 남은 예상 ${fmtW(t.listRemain)}</div></div><div class="right"><div style="font-size:22px;font-weight:800;white-space:nowrap" class="${t.budget && t.forecast > t.budget ? 'red' : ''}">${fmtW(t.forecast)}</div>${t.budget ? `<div class="card-s">예산 대비 ${t.forecast > t.budget ? '초과 ' + fmtW(t.forecast - t.budget) : '여유 ' + fmtW(t.budget - t.forecast)}</div>` : ''}</div></div></div>`;
   h += listBudgetBanner();
   h += `<div class="card"><div class="card-h"><div class="card-t">분류별 예산 대비 집행</div><div class="row" style="gap:6px">${DB.item.length ? `<button class="btn sm" onclick="openApplyBudget()">🛒 리스트 반영</button>` : ''}<button class="btn sm p" onclick="openForm('budget')">＋ 예산</button></div></div>`;
   if (!rows.length) return h + `<div class="empty"><div class="e">📊</div>분류별 예산을 입력하면<br>집행률을 한눈에 볼 수 있어요</div></div>`;
@@ -1267,6 +1282,116 @@ function importItemTemplate() {
   });
   closeSheet(); S.cost = 'items'; S.iStatus = 'open'; go('cost');
   toast(`${n}개 항목을 불러왔어요 — 필요 없는 건 지우고 가격을 다듬어 보세요`);
+}
+
+/* ═══════════════════ 자금계획 (대출 vs 현금) ═══════════════════ */
+const sortedLoans = () => [...DB.loan].sort((a, b) => (a.date || '9999').localeCompare(b.date || '9999') || (a.created || '').localeCompare(b.created || ''));
+// 예전에 결제수단 '대출실행'으로 적은 지출은 대출로 취급
+const fundOf = e => e.fund || (e.payMethod === '대출실행' ? 'loan' : 'cash');
+const isLoanFund = f => f && f !== 'cash';
+function fundOpts() { return [['cash', '💵 현금 (자기자금)'], ...sortedLoans().map(l => [l.id, '🏦 ' + l.name + (l.bank ? ' · ' + l.bank : '')]), ['loan', '🏦 대출 (기타)']]; }
+function fundName(f) { if (!f || f === 'cash') return '💵 현금'; if (f === 'loan') return '🏦 대출(기타)'; const l = byId('loan', f); return l ? '🏦 ' + l.name : '🏦 (삭제된 대출)'; }
+function loanStats(id) {
+  let paid = 0, planned = 0;
+  DB.expense.forEach(e => { const f = fundOf(e); if (id ? f === id : isLoanFund(f)) { if (e.status === '지급예정') planned += num(e.amount); else paid += num(e.amount); } });
+  return { paid, planned };
+}
+function fundTotals() {
+  const t = costTotals();
+  let paidCash = 0, paidLoan = 0, planCash = 0, planLoan = 0;
+  DB.expense.forEach(e => { const loan = isLoanFund(fundOf(e)), a = num(e.amount);
+    if (e.status === '지급예정') loan ? planLoan += a : planCash += a; else loan ? paidLoan += a : paidCash += a; });
+  const limit = DB.loan.reduce((s, l) => s + num(l.limit), 0);
+  const loanRemain = Math.max(0, limit - paidLoan - planLoan);
+  const listCash = t.listRemain;                       // 구매리스트는 현금으로 사는 것으로 계산
+  const needCash = planCash + listCash;                // 앞으로 준비할 현금 (확정+리스트)
+  const unscheduled = t.budget ? Math.max(0, t.budget - t.forecast) : 0; // 예산 중 아직 계획 안 된 금액
+  const byLoan = Math.min(unscheduled, loanRemain), extraCash = unscheduled - byLoan;
+  const interest = DB.loan.reduce((s, l) => s + loanStats(l.id).paid * num(l.rate) / 100 / 12, 0);
+  const ready = num(proj().cashReady);
+  return { paidCash, paidLoan, planCash, planLoan, limit, loanRemain, listCash, needCash, unscheduled, byLoan, extraCash, needCashBudget: needCash + extraCash, interest, ready, budget: t.budget };
+}
+function fundHomeLine() {
+  const f = fundTotals();
+  if (!DB.loan.length && !f.paidLoan && !f.planLoan && !f.ready) return '';
+  const gap = f.ready ? f.ready - f.needCash : null;
+  return `<div class="between mt" style="font-size:13px;cursor:pointer" onclick="event.stopPropagation();S.cost='fund';go('cost')"><span class="muted">💵 앞으로 준비할 현금 <b style="color:var(--text)">${fmtW(f.needCash)}</b>${gap !== null ? ` <span class="${gap < 0 ? 'red' : 'green'}">(${gap < 0 ? fmtW(-gap) + ' 부족' : fmtW(gap) + ' 여유'})</span>` : ''}</span><span class="muted">🏦 대출 실행 <b style="color:var(--blue)">${fmtW(f.paidLoan)}</b>${f.limit ? ` · 남은 한도 ${fmtW(f.loanRemain)}` : ''}</span></div>`;
+}
+function vFund() {
+  const f = fundTotals();
+  const used = f.paidLoan + f.planLoan;
+  let h = `<div class="grid md2" style="margin-bottom:12px">
+    <div class="card">
+      <div class="card-h"><div class="card-t">🏦 대출</div><button class="btn sm" onclick="openForm('loan')">＋ 대출</button></div>
+      <div class="kpi"><div class="l">실행 완료</div><div class="v" style="color:var(--blue)">${fmtW(f.paidLoan)}</div><div class="s">${f.planLoan ? '실행 예정 ' + fmtW(f.planLoan) : '지급예정 중 대출분 없음'}</div></div>
+      ${f.limit ? `<div class="bar lg mt"><i style="width:${pct(f.paidLoan, f.limit)}%;background:var(--blue)"></i><i style="width:${Math.min(100 - pct(f.paidLoan, f.limit), pct(f.planLoan, f.limit))}%;background:var(--blue);opacity:.4"></i></div>
+      <div class="between faint" style="font-size:12px;margin-top:6px"><span>승인 한도 ${fmtW(f.limit)}</span><span>남은 한도 <b style="color:var(--text)">${fmtW(f.loanRemain)}</b></span></div>` : `<div class="faint mt" style="font-size:13px">대출을 등록하면 한도·남은 금액을 보여줘요</div>`}
+      ${f.interest ? `<div class="box mt" style="font-size:13px">월 이자 약 <b>${fmtW(f.interest)}</b> <span class="faint">(실행분 × 금리 ÷ 12, 단순 계산)</span></div>` : ''}
+    </div>
+    <div class="card">
+      <div class="card-h"><div class="card-t">💵 내 현금</div><button class="btn sm" onclick="openForm('project','main')">준비된 현금 입력</button></div>
+      <div class="kpi"><div class="l">앞으로 준비할 현금</div><div class="v">${fmtW(f.needCash)}</div><div class="s">지급예정(현금) ${fmtW(f.planCash)} + 🛒 구매리스트 ${fmtW(f.listCash)}</div></div>
+      ${f.ready ? `<div class="bar lg mt"><i style="width:${pct(Math.min(f.ready, f.needCash), Math.max(f.ready, f.needCash))}%;background:var(--green)"></i></div>
+      <div class="between" style="font-size:13px;margin-top:6px"><span class="muted">준비된 현금 ${fmtW(f.ready)}</span><b class="${f.ready < f.needCash ? 'red' : 'green'}">${f.ready < f.needCash ? fmtW(f.needCash - f.ready) + ' 부족' : fmtW(f.ready - f.needCash) + ' 여유'}</b></div>` : `<div class="faint mt" style="font-size:13px">준비된 현금을 입력하면 부족/여유를 계산해요</div>`}
+      <div class="faint" style="font-size:12px;margin-top:8px">지금까지 현금으로 낸 돈 ${fmtW(f.paidCash)}</div>
+    </div>
+  </div>`;
+
+  // 예산 기준
+  if (f.budget) {
+    const t = costTotals();
+    const seg = [['지급완료 · 현금', f.paidCash, 'var(--primary)'], ['지급완료 · 대출', f.paidLoan, 'var(--blue)'], ['지급예정 · 현금', f.planCash, 'var(--accent)'], ['지급예정 · 대출', f.planLoan, '#8BB8F8'], ['구매리스트 (현금)', f.listCash, '#E8B07A'], ['아직 계획 안 된 예산', f.unscheduled, 'var(--border)']];
+    const tot = Math.max(f.budget, t.forecast) || 1;
+    h += `<div class="card"><div class="card-h"><div class="card-t">📊 예산 기준 자금 계획</div><span class="card-s">총 예산 ${fmtW(f.budget)}</span></div>
+      <div class="bar lg">${seg.map(([, v, c]) => `<i style="width:${v / tot * 100}%;background:${c}"></i>`).join('')}</div>
+      <div class="legend mt">${seg.filter(([, v]) => v).map(([l, v, c]) => `<div class="li"><span class="sw" style="background:${c}"></span><span class="grow">${l}</span><b class="num">${fmtW(v)}</b></div>`).join('')}</div>
+      ${t.forecast > f.budget ? `<div class="box mt" style="font-size:13px;background:var(--red-l)">예상 총비용이 예산을 <b class="red">${fmtW(t.forecast - f.budget)}</b> 넘어요</div>` : f.unscheduled ? `<div class="box mt" style="font-size:13px;line-height:1.7">아직 계획 안 된 예산 <b>${fmtW(f.unscheduled)}</b> 중<br>🏦 남은 대출 한도로 충당 가능 <b style="color:var(--blue)">${fmtW(f.byLoan)}</b> · 💵 현금 추가 필요 <b>${fmtW(f.extraCash)}</b></div>` : ''}
+      <div class="between mt" style="padding-top:10px;border-top:1px solid var(--border)"><div><b>예산을 다 쓴다면 앞으로 준비할 현금</b><div class="card-s">준비할 현금 ${fmtW(f.needCash)} + 추가 필요 ${fmtW(f.extraCash)}</div></div><div class="right"><div style="font-size:22px;font-weight:800;white-space:nowrap">${fmtW(f.needCashBudget)}</div>${f.ready ? `<div class="card-s ${f.ready < f.needCashBudget ? 'red' : 'green'}">${f.ready < f.needCashBudget ? fmtW(f.needCashBudget - f.ready) + ' 부족' : fmtW(f.ready - f.needCashBudget) + ' 여유'}</div>` : ''}</div></div>
+    </div>`;
+  }
+
+  // 월별 필요 자금 (지급예정)
+  const td = today(), thisM = td.slice(0, 7);
+  const months = {};
+  DB.expense.filter(e => e.status === '지급예정').forEach(e => {
+    const k = !e.date ? '시기 미정' : e.date.slice(0, 7) < thisM ? '지난 예정(미지급)' : e.date.slice(0, 7);
+    const o = (months[k] = months[k] || { cash: 0, loan: 0, n: 0 }); isLoanFund(fundOf(e)) ? o.loan += num(e.amount) : o.cash += num(e.amount); o.n++;
+  });
+  const order = k => k === '지난 예정(미지급)' ? '0' : k === '시기 미정' ? '9' : k;
+  const mk = Object.keys(months).sort((a, b) => order(a).localeCompare(order(b)));
+  let cum = 0;
+  h += `<div class="card"><div class="card-h"><div class="card-t">🗓️ 월별 필요 자금</div><button class="btn sm" onclick="openForm('expense',null,{status:'지급예정'})">＋ 지급 예정</button></div>`;
+  if (!mk.length && !f.listCash) h += `<div class="empty">계약금·중도금·잔금처럼 앞으로 낼 돈을 <b>지급예정</b>으로 등록하고<br>'자금'을 현금/대출로 고르면 달마다 준비할 현금이 보여요</div>`;
+  else h += `<div class="tb-wrap"><table class="tb"><thead><tr><th>시기</th><th class="right">💵 현금</th><th class="right">🏦 대출</th><th class="right">누적 현금</th></tr></thead><tbody>
+    ${mk.map(k => { const o = months[k]; cum += o.cash; return `<tr class="click" onclick="S.cost='list';S.fStatus='지급예정';go('cost')"><td><b>${k.length === 7 ? k.replace('-', '년 ') + '월' : `<span class="${k.startsWith('지난') ? 'red' : 'faint'}">${k}</span>`}</b> <span class="faint" style="font-size:12px">${o.n}건</span></td><td class="right num"><b>${o.cash ? fmtW(o.cash) : '-'}</b></td><td class="right num" style="color:var(--blue)">${o.loan ? fmtW(o.loan) : '-'}</td><td class="right num faint">${fmtW(cum)}</td></tr>`; }).join('')}
+    ${f.listCash ? `<tr class="click" onclick="S.cost='items';go('cost')"><td><b>🛒 구매리스트</b> <span class="faint" style="font-size:12px">시기 미정</span></td><td class="right num"><b>${fmtW(f.listCash)}</b></td><td class="right">-</td><td class="right num faint">${fmtW(cum + f.listCash)}</td></tr>` : ''}
+    </tbody></table></div>`;
+  h += `</div>`;
+
+  // 대출 목록
+  h += `<div class="card"><div class="card-h"><div class="card-t">🏦 대출 목록</div><button class="btn sm p" onclick="openForm('loan')">＋ 대출</button></div>`;
+  if (!DB.loan.length) h += `<div class="empty">토지담보대출, 건축자금대출 등을 등록하세요<br>지출을 기록할 때 '자금'에서 해당 대출을 고르면 실행액이 쌓여요</div>`;
+  else h += `<div class="list">${sortedLoans().map(l => { const st = loanStats(l.id), lim = num(l.limit);
+    return `<div class="it" onclick="openLoan('${l.id}')" style="display:block"><div class="between"><div class="row"><b>${esc(l.name)}</b><span class="faint" style="font-size:12px">${esc([l.bank, l.rate ? l.rate + '%' : ''].filter(Boolean).join(' · '))}</span></div><span class="num" style="font-size:13px"><b style="color:var(--blue)">${fmtW(st.paid)}</b> <span class="faint">/ ${fmtW(lim)}</span></span></div>
+      <div class="bar" style="margin:8px 0 4px"><i style="width:${pct(st.paid, lim)}%;background:var(--blue)"></i><i style="width:${Math.min(100 - pct(st.paid, lim), pct(st.planned, lim))}%;background:var(--blue);opacity:.4"></i></div>
+      <div class="between faint" style="font-size:12px"><span>${st.planned ? '실행 예정 ' + fmtW(st.planned) : l.date ? fmtD(l.date) : ''}</span><span>남은 한도 ${fmtW(Math.max(0, lim - st.paid - st.planned))}</span></div></div>`; }).join('')}</div>`;
+  const etc = loanStats('loan');
+  if (etc.paid + etc.planned) h += `<div class="faint mt" style="font-size:12px">🏦 대출(기타)로 기록된 지출 ${fmtW(etc.paid + etc.planned)} — 대출을 등록한 뒤 지출의 '자금'을 바꿔주세요</div>`;
+  h += `</div>`;
+  h += `<div class="faint" style="font-size:12px;line-height:1.6;padding:0 4px">💡 지출을 기록할 때 <b>자금</b> 칸에서 💵 현금 / 🏦 대출을 고르면 여기에 반영돼요. 구매리스트는 현금으로 사는 것으로 계산합니다.</div>`;
+  return h;
+}
+function openLoan(id) {
+  const l = byId('loan', id); if (!l) return;
+  const st = loanStats(id), lim = num(l.limit);
+  const ex = DB.expense.filter(e => e.fund === id).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  openSheet(`<div class="sheet-h"><h3>🏦 ${esc(l.name)}</h3><button class="btn sm" onclick="openForm('loan','${id}')">수정</button></div>
+    <div class="grid g2" style="margin-bottom:14px"><div class="box kpi"><div class="l">실행 완료</div><div class="v" style="font-size:18px;color:var(--blue)">${fmtW(st.paid)}</div>${st.planned ? `<div class="s">실행 예정 ${fmtW(st.planned)}</div>` : ''}</div>
+    <div class="box kpi"><div class="l">남은 한도</div><div class="v" style="font-size:18px">${fmtW(Math.max(0, lim - st.paid - st.planned))}</div><div class="s">한도 ${fmtW(lim)}</div></div></div>
+    ${num(l.rate) && st.paid ? `<div class="box" style="font-size:13px;margin-bottom:14px">월 이자 약 <b>${fmtW(st.paid * num(l.rate) / 100 / 12)}</b> · 연 ${fmtW(st.paid * num(l.rate) / 100)} <span class="faint">(단순 계산)</span></div>` : ''}
+    ${dlHtml('loan', l, ['name', 'limit'])}
+    <div class="sec-t between"><span>이 대출로 지급 ${ex.length}건</span><button class="btn sm" onclick="openForm('expense',null,{fund:'${id}',payMethod:'대출실행'})">＋ 지급 기록</button></div>
+    ${ex.length ? `<div class="list">${ex.map(expenseRow).join('')}</div>` : '<div class="faint" style="font-size:13px">지출 기록 시 자금에서 이 대출을 고르면 여기 쌓여요</div>'}`);
 }
 
 function openExpense(id) {
@@ -1811,9 +1936,9 @@ function exportItemsCSV() {
   download(`세컨하우스_구매리스트_${today()}.csv`, '\uFEFF' + [head.map(q).join(','), ...rows].join('\n'), 'text/csv');
 }
 function exportCSV() {
-  const head = ['날짜', '상태', '내용', '분류', '업체', '공정', '금액', '결제수단', '메모'];
+  const head = ['날짜', '상태', '내용', '분류', '업체', '공정', '금액', '자금', '결제수단', '메모'];
   const q = v => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`;
-  const rows = [...DB.expense].sort((a, b) => (a.date || '').localeCompare(b.date || '')).map(e => [e.date, e.status, e.title, e.category, refName('vendor', e.vendorId), refName('phase', e.phaseId), num(e.amount), e.payMethod, e.memo].map(q).join(','));
+  const rows = [...DB.expense].sort((a, b) => (a.date || '').localeCompare(b.date || '')).map(e => [e.date, e.status, e.title, e.category, refName('vendor', e.vendorId), refName('phase', e.phaseId), num(e.amount), fundName(fundOf(e)), e.payMethod, e.memo].map(q).join(','));
   download(`세컨하우스_지출_${today()}.csv`, '﻿' + [head.map(q).join(','), ...rows].join('\n'), 'text/csv');
 }
 async function resetLocal() {
@@ -1833,6 +1958,10 @@ function fieldHtml(f, v) {
     const opts = f.t === 'ref' ? [['', '- 선택 안함 -'], ...refOpts(f.ref)] : (typeof f.opts === 'function' ? f.opts() : f.opts).map(o => [o, o || '-']);
     if (v && !opts.some(o => o[0] === v)) opts.push([v, f.t === 'ref' ? '(삭제됨)' : v]);
     inp = `<select id="${id}">${f.t === 'select' && !f.def && !opts.some(o => o[0] === '') ? '<option value="">- 선택 -</option>' : ''}${opts.map(([k, l]) => `<option value="${esc(k)}" ${String(v) === String(k) ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
+  } else if (f.t === 'fund') {
+    const opts = fundOpts();
+    if (v && !opts.some(o => o[0] === v)) opts.push([v, '🏦 (삭제된 대출)']);
+    inp = `<select id="${id}">${opts.map(([k, l]) => `<option value="${esc(k)}" ${String(v || 'cash') === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
   } else if (f.t === 'combo') {
     const opts = typeof f.opts === 'function' ? f.opts() : f.opts;
     inp = `<input id="${id}" list="${id}_dl" value="${esc(v)}" autocomplete="off" placeholder="선택 또는 직접 입력"><datalist id="${id}_dl">${opts.map(o => `<option value="${esc(o)}">`).join('')}</datalist>`;
@@ -1879,6 +2008,10 @@ function openForm(col, id, preset) {
     ${formFields(col, rec)}
     ${col === 'meeting' && isNew ? `<label class="row" style="font-size:14px;margin-bottom:6px;cursor:pointer"><input type="checkbox" id="f__todo" checked style="width:18px;height:18px"> 액션아이템을 할일로 자동 등록</label>` : ''}
     <div class="sheet-btns"><button class="btn" onclick="closeSheet()">취소</button><button class="btn p" onclick="submitForm('${col}','${exist ? id : (rec.id || '')}',${isNew})">저장</button></div>`);
+  if (col === 'expense') {
+    const pm = document.getElementById('f_payMethod'), fd = document.getElementById('f_fund');
+    if (pm && fd) pm.addEventListener('change', () => { if (pm.value === '대출실행' && fd.value === 'cash') fd.value = DB.loan.length ? sortedLoans()[0].id : 'loan'; });
+  }
   if (col === 'expense' && isNew) {
     const v = document.getElementById('f_vendorId'), c = document.getElementById('f_category');
     if (v && c) v.addEventListener('change', () => {
@@ -1936,6 +2069,7 @@ function delRec(col, id) {
   if (col === 'vendor') { const n = DB.expense.filter(e => e.vendorId === id).length; if (n) warn = `\n(연결된 지출 ${n}건은 남고 업체 표시만 사라집니다)`; }
   if (col === 'meeting') { const n = filesOf('meeting', id).length; if (n) warn = `\n(첨부 ${n}개는 사진·자료에 남습니다)`; }
   if (col === 'item' && (byId('item', id) || {}).expenseId) warn = '\n(이미 기록된 지출은 남습니다)';
+  if (col === 'loan') { const n = DB.expense.filter(e => e.fund === id).length; if (n) warn = `\n(이 대출로 기록된 지출 ${n}건은 '대출(기타)'로 남습니다)`; }
   if (!confirm(`이 ${TITLES[col]}을(를) 삭제할까요?${warn}`)) return;
   removeRec(col, id);
   closeSheet(); render(); toast('삭제했어요');
@@ -1949,6 +2083,7 @@ function dlHtml(col, r, skip) {
     else if (f.t === 'tel') v = `<a href="tel:${esc(v)}">${esc(v)}</a>`;
     else if (f.t === 'email') v = `<a href="mailto:${esc(v)}">${esc(v)}</a>`;
     else if (f.t === 'textarea') v = `<span class="pre">${esc(v)}</span>`;
+    else if (f.t === 'fund') v = esc(fundName(v));
     else if (f.t === 'area') v = `${fmtA(v)}㎡ <span class="faint">(${fmtA(num(v) / PY)}평)</span>`;
     else if (/%/.test(f.l)) v = `${esc(v)}%`;
     else v = esc(v);
@@ -1964,7 +2099,7 @@ function openSheet(html) {
 }
 // 상세시트를 열어둔 상태에서 데이터가 바뀌면 다시 그림
 const CTX = { last: null };
-['openExpense', 'openMeeting', 'openVendor', 'openPhase'].forEach(fn => {
+['openExpense', 'openMeeting', 'openVendor', 'openPhase', 'openLoan'].forEach(fn => {
   const orig = window[fn];
   window[fn] = function (id) { CTX.last = [fn, id]; return orig(id); };
 });
@@ -1986,6 +2121,7 @@ function openQuick() {
       <button onclick="openForm('vendor')"><span>🤝</span>업체</button>
       <button onclick="openForm('expense',null,{status:'지급예정'})"><span>🗓️</span>지급 예정</button>
       <button onclick="openForm('item')"><span>🛒</span>구매 항목</button>
+      <button onclick="S.cost='fund';go('cost')"><span>🏦</span>자금계획</button>
       <button onclick="S.cost='items';go('cost')"><span>📋</span>구매리스트 보기</button>
     </div>`);
 }
@@ -2098,11 +2234,12 @@ async function sync(manual) {
     const localOnly = DB.file.filter(f => f.local);
     const data = Object.assign({}, j.data || {});
     // '예산' 시트에 함께 저장된 구매리스트를 분리
+    const raw = Object.assign({}, data);
     Object.entries(SERVER_COL).forEach(([c, sc]) => {
-      const rows = Array.isArray(data[sc]) ? data[sc] : [];
+      const rows = Array.isArray(raw[sc]) ? raw[sc] : [];
       data[c] = rows.filter(r => r._t === c).map(r => { const o = Object.assign({}, r); delete o._t; return o; });
-      data[sc] = rows.filter(r => !r._t || r._t === sc);
     });
+    new Set(Object.values(SERVER_COL)).forEach(sc => { if (Array.isArray(raw[sc])) data[sc] = raw[sc].filter(r => !r._t || r._t === sc); });
     COLS.forEach(c => { if (Array.isArray(data[c])) DB[c] = data[c].map(r => norm(c, r)); });
     localOnly.forEach(f => { if (!byId('file', f.id)) DB.file.push(f); });
     const d = new Date();
