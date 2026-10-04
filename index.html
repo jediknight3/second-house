@@ -376,6 +376,10 @@ a { color: var(--primary); }
 .pick { border: 2px dashed var(--border); border-radius: 14px; padding: 22px; text-align: center; cursor: pointer; color: var(--sub); font-weight: 600; margin-bottom: 14px; }
 .pick span { font-size: 30px; display: block; margin-bottom: 4px; }
 
+table.itb td { padding: 6px 4px; }
+.cell { width: 100%; min-width: 0; border: 1px solid transparent; background: var(--soft); border-radius: 8px; padding: 7px 8px; font-size: 14px; text-align: right; -webkit-appearance: none; appearance: none; color: var(--text); font-variant-numeric: tabular-nums; }
+select.cell { text-align: left; padding-right: 6px; }
+.cell:focus { outline: none; border-color: var(--primary); background: var(--card); }
 table.tb { width: 100%; border-collapse: collapse; font-size: 14px; }
 table.tb th { text-align: left; font-size: 12px; color: var(--sub); font-weight: 700; padding: 8px 6px; border-bottom: 1px solid var(--border); }
 table.tb td { padding: 10px 6px; border-bottom: 1px solid var(--border); vertical-align: middle; }
@@ -405,10 +409,12 @@ table.tb tr.click { cursor: pointer; }
 
 <script>
 'use strict';
-const APP_VER = '1.1.0';
+const APP_VER = '1.2.0';
 
 /* ═══════════════════ 상수 ═══════════════════ */
-const COLS = ['project','phase','budget','expense','vendor','meeting','todo','file'];
+const COLS = ['project','phase','budget','expense','vendor','meeting','todo','file','item'];
+// 구매리스트(item)는 기존 Apps Script를 다시 배포하지 않아도 되도록 '예산' 시트에 _t:'item' 표시로 함께 저장
+const SERVER_COL = { item: 'budget' };
 const CATS = ['토지','설계·감리','인허가·세금','토목·기초','골조','지붕','창호','단열·방수','전기·통신','설비(배관·냉난방)','내장·마감','외장','주방·욕실','조경·외부','가구·가전','인입(전기·수도·가스)','금융비용','기타'];
 const PHASE_TEMPLATE = ['토지 매입','설계','인허가','착공 준비','토목·기초','골조','지붕·외벽','창호','설비·전기','내장 마감','조경·외부','준공·사용승인','입주'];
 const FILE_KINDS = ['현장사진','도면','계약서','견적서','영수증','인허가','참고이미지','기타'];
@@ -422,6 +428,31 @@ const PRIO = ['높음','보통','낮음'];
 const RATING = ['','★','★★','★★★','★★★★','★★★★★'];
 const PALETTE = ['#2F6B4F','#C9772B','#3182F6','#8E5BD6','#E5484D','#0FA3A3','#D4A017','#6B7280','#DB5E9B','#7A8B2E'];
 const PY = 3.3058;
+const ITEM_GROUPS = ['가전','가구','조명','커튼·블라인드','주방·생활용품','침구·패브릭','욕실용품','외부·캠핑','인테리어 옵션','기타'];
+const GROUP_CAT = { '가전':'가구·가전', '가구':'가구·가전', '조명':'전기·통신', '커튼·블라인드':'내장·마감', '주방·생활용품':'가구·가전', '침구·패브릭':'가구·가전', '욕실용품':'주방·욕실', '외부·캠핑':'조경·외부', '인테리어 옵션':'내장·마감' };
+const GROUP_ICON = { '가전':'📺', '가구':'🛋️', '조명':'💡', '커튼·블라인드':'🪟', '주방·생활용품':'🍳', '침구·패브릭':'🛏️', '욕실용품':'🧴', '외부·캠핑':'🏕️', '인테리어 옵션':'🎨', '기타':'📦' };
+const ROOMS = ['거실','주방·다이닝','안방','자녀방','다락','욕실','현관','다용도실','외부·데크','공용'];
+const ITEM_STATUS = ['검토중','결정','주문','구매완료','보류'];
+const ITEM_PRIO = ['필수','희망','나중에'];
+// [구분, 품목, 공간, 수량, 참고 단가(대략)]
+const ITEM_TEMPLATE = [
+  ['가전','냉장고','주방·다이닝',1,2500000],['가전','김치냉장고','주방·다이닝',1,1500000],['가전','인덕션','주방·다이닝',1,1200000],
+  ['가전','식기세척기','주방·다이닝',1,1300000],['가전','전자레인지·오븐','주방·다이닝',1,600000],['가전','정수기','주방·다이닝',1,500000],
+  ['가전','세탁기','다용도실',1,1200000],['가전','건조기','다용도실',1,1300000],['가전','스탠드 에어컨','거실',1,2500000],
+  ['가전','벽걸이 에어컨','공용',3,800000],['가전','TV','거실',1,2000000],['가전','로봇청소기','공용',1,1200000],
+  ['가전','공기청정기','거실',1,600000],['가전','제습기','공용',1,400000],['가전','비데','욕실',2,400000],
+  ['가구','소파','거실',1,2500000],['가구','거실 테이블','거실',1,400000],['가구','TV장','거실',1,600000],
+  ['가구','식탁 세트','주방·다이닝',1,1500000],['가구','침대 프레임','안방',1,1200000],['가구','매트리스','안방',1,1500000],
+  ['가구','침대+매트리스','자녀방',2,1200000],['가구','옷장','안방',1,2000000],['가구','책상·의자','자녀방',2,600000],
+  ['가구','신발장·수납장','현관',1,500000],['가구','다락 수납·좌식가구','다락',1,500000],
+  ['조명','거실 메인 조명','거실',1,500000],['조명','식탁 펜던트','주방·다이닝',1,300000],['조명','방 조명','공용',4,150000],['조명','외부·정원 조명','외부·데크',1,600000],
+  ['커튼·블라인드','거실 커튼·블라인드','거실',1,800000],['커튼·블라인드','방 블라인드','공용',4,250000],
+  ['주방·생활용품','식기·조리도구','주방·다이닝',1,800000],['주방·생활용품','수납용품','공용',1,400000],
+  ['침구·패브릭','침구 세트','공용',3,300000],['침구·패브릭','러그','거실',1,400000],
+  ['욕실용품','수건·욕실소품','욕실',1,300000],
+  ['외부·캠핑','바비큐 그릴','외부·데크',1,700000],['외부·캠핑','야외 테이블·의자','외부·데크',1,1000000],['외부·캠핑','파라솔·어닝','외부·데크',1,600000],
+  ['외부·캠핑','정원 관리 도구','외부·데크',1,400000],['외부·캠핑','잔디깎이','외부·데크',1,500000],
+];
 
 const NAV = [
   { id:'home',    ic:'🏡', l:'홈' },
@@ -509,6 +540,21 @@ const F = {
     { k:'meetingId', l:'관련 미팅', t:'ref', ref:'meeting', half:1 },
     { k:'memo', l:'메모', t:'textarea' },
   ],
+  item: [
+    { k:'group', l:'구분', t:'combo', opts:()=>itemGroups(), req:1, def:'가전', half:1 },
+    { k:'room', l:'공간', t:'combo', opts:ROOMS, half:1 },
+    { k:'name', l:'품목', t:'text', req:1, ph:'예) 냉장고' },
+    { k:'model', l:'브랜드·모델', t:'text', ph:'예) 삼성 비스포크 4도어' },
+    { k:'qty', l:'수량', t:'number', def:1, half:1 },
+    { k:'estPrice', l:'예상 단가(원)', t:'money', half:1 },
+    { k:'status', l:'상태', t:'select', opts:ITEM_STATUS, def:'검토중', half:1 },
+    { k:'priority', l:'우선순위', t:'select', opts:ITEM_PRIO, def:'필수', half:1 },
+    { k:'actual', l:'실제 구매금액(총액)', t:'money', half:1, hint:'구매완료 시 입력 — 비우면 예상금액으로 기록' },
+    { k:'buyDate', l:'구매일', t:'date', half:1 },
+    { k:'store', l:'구매처', t:'text', ph:'예) 쿠팡, 하이마트, 백화점' },
+    { k:'url', l:'상품 링크', t:'text', ph:'https://' },
+    { k:'memo', l:'메모', t:'textarea', ph:'사이즈, 색상, 비교 후보 등' },
+  ],
   file: [
     { k:'date', l:'날짜', t:'date', half:1 },
     { k:'kind', l:'종류', t:'select', opts:FILE_KINDS, half:1 },
@@ -518,7 +564,7 @@ const F = {
     { k:'memo', l:'메모', t:'textarea' },
   ],
 };
-const TITLES = { project:'프로젝트 정보', expense:'지출', budget:'예산', phase:'공정', vendor:'업체', meeting:'미팅', todo:'할일', file:'자료' };
+const TITLES = { project:'프로젝트 정보', expense:'지출', budget:'예산', phase:'공정', vendor:'업체', meeting:'미팅', todo:'할일', file:'자료', item:'구매 항목' };
 
 /* ═══════════════════ 저장소 (IndexedDB) ═══════════════════ */
 const IDB = {
@@ -552,7 +598,7 @@ const IDB = {
 let DB = {}; COLS.forEach(c => DB[c] = []);
 let PENDING = [];
 let CFG = { gas: '', lastSync: '' };
-const S = { page: 'home', cost: 'list', meet: 'meeting', fCat: '', fStatus: '', fVendor: '', q: '', pKind: '', pPhase: '', todoAll: false, vQ: '' };
+const S = { iGroupBy: 'group', iStatus: 'open', iQ: '', page: 'home', cost: 'list', meet: 'meeting', fCat: '', fStatus: '', fVendor: '', q: '', pKind: '', pPhase: '', todoAll: false, vQ: '' };
 let SYNCING = false, flushTimer = null;
 
 async function persist() {
@@ -606,7 +652,7 @@ function removeRec(col, id) {
 
 function cats() {
   const s = new Set(CATS);
-  DB.budget.forEach(b => b.category && s.add(b.category));
+  costBudgets().forEach(b => b.category && s.add(b.category));
   DB.expense.forEach(e => e.category && s.add(e.category));
   return [...s];
 }
@@ -639,17 +685,20 @@ const daysBetween = (a, b) => Math.round((new Date(b + 'T00:00:00') - new Date(a
 const pct = (a, b) => b > 0 ? Math.max(0, Math.min(100, a / b * 100)) : 0;
 
 /* ═══════════════════ 계산 ═══════════════════ */
+const costBudgets = () => DB.budget.filter(b => b.scope !== 'list');
+const listBudget = g => DB.budget.find(b => b.scope === 'list' && b.category === g);
 function costTotals() {
   let paid = 0, planned = 0;
   DB.expense.forEach(e => { if (e.status === '지급예정') planned += num(e.amount); else paid += num(e.amount); });
-  const catBudget = DB.budget.reduce((s, b) => s + num(b.amount), 0);
+  const catBudget = costBudgets().reduce((s, b) => s + num(b.amount), 0);
   const budget = num(proj().totalBudget) || catBudget;
-  return { paid, planned, total: paid + planned, budget, catBudget, remain: budget - paid - planned };
+  const listRemain = DB.item.filter(it => !['구매완료', '보류'].includes(it.status) && !it.expenseId).reduce((s, it) => s + itemEst(it), 0);
+  return { paid, planned, total: paid + planned, budget, catBudget, remain: budget - paid - planned, listRemain, forecast: paid + planned + listRemain };
 }
 function byCategory() {
   const m = {};
   cats().forEach(c => m[c] = { cat: c, budget: 0, paid: 0, planned: 0 });
-  DB.budget.forEach(b => { const c = b.category || '기타'; (m[c] = m[c] || { cat: c, budget: 0, paid: 0, planned: 0 }).budget += num(b.amount); });
+  costBudgets().forEach(b => { const c = b.category || '기타'; (m[c] = m[c] || { cat: c, budget: 0, paid: 0, planned: 0 }).budget += num(b.amount); });
   DB.expense.forEach(e => { const c = e.category || '기타'; const o = (m[c] = m[c] || { cat: c, budget: 0, paid: 0, planned: 0 }); if (e.status === '지급예정') o.planned += num(e.amount); else o.paid += num(e.amount); });
   return Object.values(m).filter(o => o.budget || o.paid || o.planned);
 }
@@ -738,7 +787,8 @@ function vHome() {
       <div class="kpi"><div class="l">예산 잔여</div><div class="v ${t.remain < 0 ? 'red' : ''}">${t.budget ? fmtW(t.remain) : '-'}</div></div>
       <div class="kpi"><div class="l">평당 건축비</div><div class="v">${bld ? fmtW(buildCost / bld) : '-'}</div><div class="s">${bld ? '토지 제외 · 연면적 ' + bld.toFixed(1) + '평' : '연면적 입력 시 계산'}</div></div>
     </div>
-    ${t.budget ? `<div class="bar lg mt"><i style="width:${used}%;background:var(--primary)"></i><i style="width:${plan}%;background:var(--accent);opacity:.6"></i></div>` : ''}
+    ${t.budget ? `<div class="bar lg mt"><i style="width:${used}%;background:var(--primary)"></i><i style="width:${plan}%;background:var(--accent);opacity:.6"></i><i style="width:${Math.min(100 - used - plan, pct(t.listRemain, t.budget))}%;background:var(--blue);opacity:.45"></i></div>` : ''}
+    ${t.listRemain ? `<div class="between mt" style="font-size:13px"><span class="muted">🛒 구매리스트 남은 예상 <b style="color:var(--blue)">${fmtW(t.listRemain)}</b></span><span>예상 총비용 <b class="${t.budget && t.forecast > t.budget ? 'red' : ''}">${fmtW(t.forecast)}</b>${t.budget ? ` <span class="faint">(예산의 ${(t.forecast / t.budget * 100).toFixed(0)}%)</span>` : ''}</span></div>` : ''}
   </div>`;
 
   h += `<div class="grid md2">`;
@@ -808,9 +858,10 @@ const vendorBadge = s => `<span class="badge ${{ '계약': 'p', '진행중': 'b'
 
 /* ═══════════════════ 비용 ═══════════════════ */
 function vCost() {
-  const tabs = [['list', '지출 내역'], ['budget', '예산'], ['analysis', '분석']];
+  const tabs = [['list', '지출 내역'], ['items', '구매리스트'], ['budget', '예산'], ['analysis', '분석']];
   let h = `<div class="tabs">${tabs.map(([k, l]) => `<button class="${S.cost === k ? 'on' : ''}" onclick="S.cost='${k}';render()">${l}</button>`).join('')}</div>`;
   if (S.cost === 'budget') return h + vBudget();
+  if (S.cost === 'items') return h + vItems();
   if (S.cost === 'analysis') return h + vAnalysis();
 
   const t = costTotals();
@@ -867,12 +918,13 @@ function vBudget() {
   if (num(proj().totalBudget) && t.catBudget && Math.abs(num(proj().totalBudget) - t.catBudget) >= 1) {
     h += `<div class="card box" style="background:var(--yellow-l);color:var(--text);font-size:13px">총 예산 ${fmtW(proj().totalBudget)} · 분류별 예산 합계 ${fmtW(t.catBudget)} → 미배정 <b>${fmtW(num(proj().totalBudget) - t.catBudget)}</b></div>`;
   }
+  if (t.listRemain) h += `<div class="card"><div class="between"><div><div class="card-t">예상 총비용</div><div class="card-s">지급완료 ${fmtW(t.paid)} + 지급예정 ${fmtW(t.planned)} + 구매리스트 남은 예상 ${fmtW(t.listRemain)}</div></div><div class="right"><div style="font-size:22px;font-weight:800" class="${t.budget && t.forecast > t.budget ? 'red' : ''}">${fmtW(t.forecast)}</div>${t.budget ? `<div class="card-s">예산 대비 ${t.forecast > t.budget ? '초과 ' + fmtW(t.forecast - t.budget) : '여유 ' + fmtW(t.budget - t.forecast)}</div>` : ''}</div></div></div>`;
   h += `<div class="card"><div class="card-h"><div class="card-t">분류별 예산 대비 집행</div><button class="btn sm p" onclick="openForm('budget')">＋ 예산</button></div>`;
   if (!rows.length) return h + `<div class="empty"><div class="e">📊</div>분류별 예산을 입력하면<br>집행률을 한눈에 볼 수 있어요</div></div>`;
   h += rows.map(r => {
     const base = Math.max(r.budget, r.paid + r.planned) || 1;
     const over = r.budget && r.paid + r.planned > r.budget;
-    const bIds = DB.budget.filter(b => (b.category || '기타') === r.cat).map(b => b.id);
+    const bIds = costBudgets().filter(b => (b.category || '기타') === r.cat).map(b => b.id);
     return `<div style="padding:12px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="${bIds.length ? `openForm('budget','${bIds[0]}')` : `openForm('budget',null,{category:'${esc(r.cat)}'})`}">
       <div class="between"><div class="row"><span>${catIcon(r.cat)}</span><b style="font-size:14px">${esc(r.cat)}</b>${over ? '<span class="badge r">초과</span>' : ''}</div>
         <div class="num" style="font-size:13px"><b>${fmtW(r.paid + r.planned)}</b> <span class="muted">/ ${r.budget ? fmtW(r.budget) : '예산없음'}</span></div></div>
@@ -927,12 +979,198 @@ function vAnalysis() {
   return h;
 }
 
+/* ═══════════════════ 구매리스트 ═══════════════════ */
+const itemQty = it => num(it.qty) > 0 ? num(it.qty) : 1;
+const itemEst = it => itemQty(it) * num(it.estPrice);
+const itemCost = it => it.status === '구매완료' && it.actual !== '' && it.actual != null && num(it.actual) ? num(it.actual) : itemEst(it);
+const itemBought = it => it.status === '구매완료';
+function itemGroups() {
+  const s = new Set(ITEM_GROUPS);
+  DB.item.forEach(it => it.group && s.add(it.group));
+  return [...s];
+}
+function sortedItems(list) {
+  const go = g => { const i = itemGroups().indexOf(g); return i < 0 ? 99 : i; };
+  return [...list].sort((a, b) => go(a.group) - go(b.group) || ITEM_PRIO.indexOf(a.priority) - ITEM_PRIO.indexOf(b.priority) || (a.room || '').localeCompare(b.room || '') || (a.created || '').localeCompare(b.created || ''));
+}
+const itemStatusBadge = s => `<span class="badge ${{ '결정': 'p', '주문': 'b', '구매완료': 'g', '보류': 'r' }[s] || ''}">${esc(s || '검토중')}</span>`;
+const isWide = () => window.innerWidth >= 768;
+
+function vItems() {
+  const all = DB.item;
+  const active = all.filter(it => it.status !== '보류');
+  const est = active.reduce((s, it) => s + itemCost(it), 0);
+  const bought = all.filter(itemBought).reduce((s, it) => s + itemCost(it), 0);
+  const remain = active.filter(it => !itemBought(it)).reduce((s, it) => s + itemEst(it), 0);
+  const lb = DB.budget.filter(b => b.scope === 'list').reduce((s, b) => s + num(b.amount), 0);
+  const noPrice = active.filter(it => !itemBought(it) && !num(it.estPrice)).length;
+  let h = `<div class="grid g2 g4" style="margin-bottom:12px">
+    <div class="card kpi"><div class="l">예상 합계</div><div class="v">${fmtW(est)}</div><div class="s">${active.length}개 항목${noPrice ? ` · <span style="color:var(--accent)">가격 미입력 ${noPrice}</span>` : ''}</div></div>
+    <div class="card kpi"><div class="l">구매완료</div><div class="v green">${fmtW(bought)}</div><div class="s">${all.filter(itemBought).length}개</div></div>
+    <div class="card kpi"><div class="l">남은 예상</div><div class="v" style="color:var(--blue)">${fmtW(remain)}</div><div class="s">미구매 ${active.filter(it => !itemBought(it)).length}개</div></div>
+    <div class="card kpi"><div class="l">리스트 예산</div><div class="v ${lb && est > lb ? 'red' : ''}">${lb ? fmtW(lb) : '-'}</div><div class="s">${lb ? (est > lb ? '초과 ' + fmtW(est - lb) : '여유 ' + fmtW(lb - est)) : '구분 제목을 눌러 설정'}</div></div>
+  </div>`;
+  h += `<div class="row wrap" style="margin-bottom:10px;gap:6px">
+      <button class="btn p sm" onclick="openForm('item')">＋ 항목</button>
+      <button class="btn sm" onclick="openItemTemplate()">📋 기본 리스트 불러오기</button>
+      <button class="btn sm" onclick="exportItemsCSV()">⬇ 엑셀(CSV)</button>
+    </div>
+    <input class="search" placeholder="🔍 품목·모델·구매처 검색" value="${esc(S.iQ)}" oninput="S.iQ=this.value;renderItemList()">
+    <div class="between wrap" style="margin-bottom:6px;gap:6px">
+      <div class="chips" style="margin:0">${[['open', '미구매'], ['all', '전체'], ['bought', '구매완료'], ['hold', '보류']].map(([k, l]) => `<button class="chip ${S.iStatus === k ? 'on' : ''}" onclick="S.iStatus='${k}';renderItemList(true)">${l}</button>`).join('')}</div>
+      <div class="chips" style="margin:0">${[['group', '구분별'], ['room', '공간별']].map(([k, l]) => `<button class="chip ${S.iGroupBy === k ? 'on' : ''}" onclick="S.iGroupBy='${k}';renderItemList(true)">${l}</button>`).join('')}</div>
+    </div>
+    <div id="itemList">${itemListHtml()}</div>`;
+  return h;
+}
+function renderItemList(chips) {
+  if (chips) return render();
+  const el = document.getElementById('itemList'); if (el) el.innerHTML = itemListHtml();
+}
+function itemListHtml() {
+  const q = S.iQ.trim().toLowerCase();
+  const list = sortedItems(DB.item.filter(it =>
+    (S.iStatus === 'all' || (S.iStatus === 'open' && !itemBought(it) && it.status !== '보류') || (S.iStatus === 'bought' && itemBought(it)) || (S.iStatus === 'hold' && it.status === '보류')) &&
+    (!q || [it.name, it.model, it.store, it.memo, it.room, it.group].join(' ').toLowerCase().includes(q))));
+  if (!DB.item.length) return `<div class="card"><div class="empty"><div class="e">🛒</div>가전·가구·조명·커튼처럼 앞으로 살 것들을<br>미리 적어두고 예산을 잡아보세요<br><button class="btn p sm mt" onclick="openItemTemplate()">📋 기본 리스트 불러오기</button> <button class="btn sm mt" onclick="openForm('item')">＋ 직접 추가</button></div></div>`;
+  if (!list.length) return `<div class="card"><div class="empty">조건에 맞는 항목이 없어요</div></div>`;
+  const key = S.iGroupBy === 'room' ? (it => it.room || '공간 미지정') : (it => it.group || '기타');
+  const groups = {};
+  list.forEach(it => (groups[key(it)] = groups[key(it)] || []).push(it));
+  const wide = isWide();
+  return Object.entries(groups).map(([g, items]) => {
+    const sum = items.filter(it => it.status !== '보류').reduce((s, it) => s + itemCost(it), 0);
+    const allG = S.iGroupBy === 'group' ? DB.item.filter(it => (it.group || '기타') === g && it.status !== '보류') : null;
+    const gTotal = allG ? allG.reduce((s, it) => s + itemCost(it), 0) : 0;
+    const b = S.iGroupBy === 'group' ? listBudget(g) : null;
+    const bAmt = b ? num(b.amount) : 0;
+    const head = `<div class="grp-h" style="align-items:center;${S.iGroupBy === 'group' ? 'cursor:pointer' : ''}" ${S.iGroupBy === 'group' ? `onclick="openGroupBudget('${esc(g)}')"` : ''}>
+        <span>${S.iGroupBy === 'group' ? (GROUP_ICON[g] || '📦') + ' ' : ''}${esc(g)} <span class="faint" style="font-weight:600">${items.length}</span></span>
+        <span class="num">${fmtW(sum)}${bAmt ? ` <span class="${gTotal > bAmt ? 'red' : 'faint'}" style="font-weight:600">/ ${fmtW(bAmt)}</span>` : S.iGroupBy === 'group' ? ' <span class="faint" style="font-weight:600;font-size:11px">예산설정</span>' : ''}</span></div>
+      ${bAmt ? `<div class="bar" style="margin:-2px 4px 8px"><i style="width:${pct(gTotal, bAmt)}%;background:${gTotal > bAmt ? 'var(--red)' : 'var(--blue)'}"></i></div>` : ''}`;
+    return head + (wide ? itemTable(items) : `<div class="card" style="padding:4px 16px"><div class="list">${items.map(itemRow).join('')}</div></div>`);
+  }).join('');
+}
+function itemRow(it) {
+  const done = itemBought(it), hold = it.status === '보류';
+  return `<div class="it" onclick="openForm('item','${it.id}')">
+    <div class="check ${done ? 'on' : ''}" onclick="event.stopPropagation();toggleItemBought('${it.id}')">${done ? '✓' : ''}</div>
+    <div class="grow"><div class="t ellipsis ${done || hold ? 'done-t' : ''}" style="font-weight:700">${esc(it.name)}</div>
+      <div class="s ellipsis">${[it.priority && it.priority !== '필수' ? '★' + it.priority : '', S.iGroupBy === 'room' ? it.group : it.room, it.model, itemQty(it) > 1 ? `${itemQty(it)}개 × ${fmtW(it.estPrice)}` : ''].filter(Boolean).map(esc).join(' · ')}</div></div>
+    <div class="right"><div class="amt" style="${done ? 'color:var(--green)' : !num(it.estPrice) ? 'color:var(--faint)' : ''}">${num(it.estPrice) || done ? fmtW(itemCost(it)) : '가격 미정'}</div><div>${it.status !== '검토중' ? itemStatusBadge(it.status) : ''}</div></div>
+  </div>`;
+}
+function itemTable(items) {
+  return `<div class="card" style="padding:6px 12px"><div class="tb-wrap"><table class="tb itb">
+    <thead><tr><th style="width:34px"></th><th>품목</th><th style="width:70px">수량</th><th style="width:130px">예상 단가</th><th style="width:110px" class="right">예상 금액</th><th style="width:130px">실제 구매금액</th><th style="width:100px">상태</th><th style="width:44px"></th></tr></thead>
+    <tbody>${items.map(it => {
+      const done = itemBought(it);
+      return `<tr>
+        <td><div class="check ${done ? 'on' : ''}" onclick="toggleItemBought('${it.id}')">${done ? '✓' : ''}</div></td>
+        <td style="min-width:150px"><div class="${done || it.status === '보류' ? 'done-t' : ''}" style="font-weight:700">${esc(it.name)}${it.url ? ` <a href="${esc(it.url)}" target="_blank" rel="noopener" title="상품 링크" style="text-decoration:none">🔗</a>` : ''}</div>
+          <div class="faint" style="font-size:12px">${[S.iGroupBy === 'room' ? it.group : it.room, it.model, it.priority !== '필수' ? it.priority : ''].filter(Boolean).map(esc).join(' · ')}</div></td>
+        <td><input class="cell" inputmode="numeric" value="${itemQty(it)}" onchange="itemSet('${it.id}','qty',this.value)"></td>
+        <td><input class="cell money" inputmode="numeric" value="${num(it.estPrice) ? fmtN(it.estPrice) : ''}" placeholder="0" onchange="itemSet('${it.id}','estPrice',this.value)"></td>
+        <td class="right num" style="font-weight:700">${num(it.estPrice) ? fmtN(itemEst(it)) : '<span class="faint">-</span>'}</td>
+        <td><input class="cell money" inputmode="numeric" value="${it.actual !== '' && it.actual != null && num(it.actual) ? fmtN(it.actual) : ''}" placeholder="${done ? fmtN(itemEst(it)) : ''}" onchange="itemSet('${it.id}','actual',this.value)"></td>
+        <td><select class="cell" onchange="itemSetStatus('${it.id}',this.value)">${ITEM_STATUS.map(s => `<option ${it.status === s ? 'selected' : ''}>${s}</option>`).join('')}</select></td>
+        <td><button class="icon-btn" style="width:30px;height:30px;font-size:13px" onclick="openForm('item','${it.id}')" title="상세">✎</button></td>
+      </tr>`;
+    }).join('')}</tbody></table></div></div>`;
+}
+function itemSet(id, k, v) {
+  const it = byId('item', id); if (!it) return;
+  const val = String(v).trim() === '' ? (k === 'qty' ? 1 : '') : num(v);
+  const rec = upsert('item', Object.assign({}, it, { [k]: val }));
+  if (itemBought(rec) && rec.expenseId) syncItemExpense(rec);
+  renderKeepScroll();
+}
+function itemSetStatus(id, v) {
+  const it = byId('item', id); if (!it) return;
+  const prev = it.status;
+  const rec = upsert('item', Object.assign({}, it, { status: v }));
+  const m = afterItemSave(rec, prev);
+  renderKeepScroll();
+  if (m !== '저장했어요') toast(m);
+}
+function toggleItemBought(id) {
+  const it = byId('item', id); if (!it) return;
+  itemSetStatus(id, itemBought(it) ? '결정' : '구매완료');
+}
+function renderKeepScroll() { const y = window.scrollY; render(); window.scrollTo(0, y); }
+// 구매완료 ↔ 지출 기록 연동 (같은 돈을 두 번 입력하지 않도록)
+function afterItemSave(rec, prevStatus) {
+  if (itemBought(rec)) {
+    const patch = {};
+    if (!rec.buyDate) patch.buyDate = today();
+    if (Object.keys(patch).length) rec = upsert('item', Object.assign({}, rec, patch));
+    if (!itemCost(rec)) return '저장했어요 · 금액을 입력하면 지출에도 기록돼요';
+    const had = !!rec.expenseId && byId('expense', rec.expenseId);
+    syncItemExpense(rec);
+    return had ? '저장했어요 · 연결된 지출도 수정했어요' : '구매완료 · 💰 지출에도 기록했어요';
+  }
+  if (prevStatus === '구매완료' && rec.expenseId) {
+    const ex = byId('expense', rec.expenseId);
+    if (ex && confirm(`'${rec.name}' 구매완료를 취소할까요?\n자동으로 기록된 지출(${fmtN(ex.amount)}원)도 삭제합니다.`)) removeRec('expense', ex.id);
+    upsert('item', Object.assign({}, rec, { expenseId: '' }));
+    return '구매완료를 취소했어요';
+  }
+  return '저장했어요';
+}
+function syncItemExpense(it) {
+  const amt = itemCost(it);
+  if (!amt) return;
+  const ex = it.expenseId && byId('expense', it.expenseId);
+  const fields = { date: it.buyDate || today(), title: [it.name, it.model].filter(Boolean).join(' '), amount: amt, category: GROUP_CAT[it.group] || '가구·가전', status: '지급완료', memo: `🛒 구매리스트${it.store ? ' · ' + it.store : ''}`, itemId: it.id };
+  if (ex) {
+    if (['date', 'title', 'amount', 'category'].some(k => String(ex[k]) !== String(fields[k]))) upsert('expense', Object.assign({}, ex, fields));
+  } else {
+    const e = upsert('expense', fields);
+    upsert('item', Object.assign({}, byId('item', it.id), { expenseId: e.id }));
+  }
+}
+function openGroupBudget(g) {
+  const b = listBudget(g);
+  const cur = DB.item.filter(it => (it.group || '기타') === g && it.status !== '보류').reduce((s, it) => s + itemCost(it), 0);
+  openSheet(`<div class="sheet-h"><h3>${GROUP_ICON[g] || '📦'} ${esc(g)} 예산</h3></div>
+    <div class="box" style="margin-bottom:14px">현재 리스트 예상 합계 <b>${fmtN(cur)}원</b> (${fmtW(cur)})</div>
+    <div class="fld"><label>예산(원)</label><input id="f_gb" class="money" inputmode="numeric" value="${b && num(b.amount) ? fmtN(b.amount) : ''}" placeholder="0"><div class="hint" id="f_gb_h">${b && num(b.amount) ? fmtW(b.amount) : ''}</div></div>
+    <div class="sheet-btns">${b ? `<button class="btn d" onclick="saveGroupBudget('${esc(g)}',0)">삭제</button>` : `<button class="btn" onclick="closeSheet()">취소</button>`}<button class="btn p" onclick="saveGroupBudget('${esc(g)}',num(document.getElementById('f_gb').value))">저장</button></div>`);
+}
+function saveGroupBudget(g, amt) {
+  const b = listBudget(g);
+  if (!amt) { if (b) removeRec('budget', b.id); }
+  else upsert('budget', Object.assign({}, b || { scope: 'list', category: g }, { amount: amt }));
+  closeSheet(); render(); toast('예산을 저장했어요');
+}
+function openItemTemplate() {
+  const groups = [...new Set(ITEM_TEMPLATE.map(r => r[0]))];
+  const has = r => DB.item.some(it => it.group === r[0] && it.name === r[1]);
+  openSheet(`<div class="sheet-h"><h3>📋 기본 리스트 불러오기</h3></div>
+    <div class="card-s" style="margin-bottom:12px;line-height:1.6">세컨하우스에 흔히 필요한 품목이에요. 불러온 뒤 자유롭게 수정·삭제하세요. 이미 있는 품목은 건너뜁니다.</div>
+    ${groups.map(g => { const rows = ITEM_TEMPLATE.filter(r => r[0] === g); const n = rows.filter(r => !has(r)).length;
+      return `<label class="row" style="padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer;font-size:15px"><input type="checkbox" class="tplg" value="${esc(g)}" ${n ? 'checked' : 'disabled'} style="width:20px;height:20px"><span class="grow">${GROUP_ICON[g] || '📦'} <b>${esc(g)}</b> <span class="faint" style="font-size:12px">${rows.map(r => r[1]).slice(0, 4).join(', ')}${rows.length > 4 ? ' 외' : ''}</span></span><span class="faint" style="font-size:13px">${n ? n + '개' : '추가됨'}</span></label>`; }).join('')}
+    <label class="row mt" style="font-size:14px;cursor:pointer"><input type="checkbox" id="tplPrice" checked style="width:18px;height:18px"> 참고 가격(대략)도 함께 넣기 <span class="faint" style="font-size:12px">— 중간급 제품 기준 대략치</span></label>
+    <div class="sheet-btns"><button class="btn" onclick="closeSheet()">취소</button><button class="btn p" onclick="importItemTemplate()">불러오기</button></div>`);
+}
+function importItemTemplate() {
+  const gs = [...document.querySelectorAll('.tplg:checked')].map(x => x.value);
+  const withPrice = document.getElementById('tplPrice').checked;
+  let n = 0;
+  ITEM_TEMPLATE.filter(r => gs.includes(r[0]) && !DB.item.some(it => it.group === r[0] && it.name === r[1])).forEach(r => {
+    upsert('item', { group: r[0], name: r[1], room: r[2], qty: r[3], estPrice: withPrice ? r[4] : '', status: '검토중', priority: '필수' }); n++;
+  });
+  closeSheet(); S.cost = 'items'; S.iStatus = 'open'; go('cost');
+  toast(`${n}개 항목을 불러왔어요 — 필요 없는 건 지우고 가격을 다듬어 보세요`);
+}
+
 function openExpense(id) {
   const e = byId('expense', id); if (!e) return;
   const fs = filesOf('expense', id);
   openSheet(`<div class="sheet-h"><h3>${esc(e.title)}</h3><button class="btn sm" onclick="openForm('expense','${id}')">수정</button></div>
     <div class="kpi" style="margin-bottom:16px"><div class="v" style="font-size:26px;${e.status === '지급예정' ? 'color:var(--accent)' : ''}">${fmtN(e.amount)}원</div><div class="s">${fmtW(e.amount)} · ${esc(e.status || '')}</div></div>
     ${dlHtml('expense', e, ['title', 'amount', 'status'])}
+    ${e.itemId && byId('item', e.itemId) ? `<div class="box mt" style="font-size:13px">🛒 구매리스트 '<a href="#" onclick="event.preventDefault();openForm('item','${e.itemId}')">${esc(byId('item', e.itemId).name)}</a>'에서 자동 기록된 지출이에요</div>` : ''}
     <div class="sec-t between"><span>첨부 (영수증·계약서) ${fs.length}</span><button class="btn sm" onclick="openUploader({linkType:'expense',linkId:'${id}',kind:'영수증',phaseId:'${e.phaseId || ''}',vendorId:'${e.vendorId || ''}',date:'${e.date || ''}'})">＋ 첨부</button></div>
     ${fs.length ? photoGrid(fs) : '<div class="faint" style="font-size:13px">첨부 없음</div>'}
     ${e.status === '지급예정' ? `<div class="sheet-btns"><button class="btn p" onclick="markPaid('${id}')">✔ 지급완료 처리</button></div>` : ''}`);
@@ -1361,7 +1599,7 @@ function vSettings() {
       <div id="qrBox" class="mt" style="display:none;text-align:center"></div>
     </div>` : ''}
     <div class="card"><div class="card-t" style="margin-bottom:10px">💾 백업·내보내기</div>
-      <div class="row wrap"><button class="btn sm" onclick="exportJSON()">전체 백업(JSON)</button><button class="btn sm" onclick="document.getElementById('importPick').click()">백업 불러오기</button><button class="btn sm" onclick="exportCSV()">지출내역 CSV(엑셀)</button></div>
+      <div class="row wrap"><button class="btn sm" onclick="exportJSON()">전체 백업(JSON)</button><button class="btn sm" onclick="document.getElementById('importPick').click()">백업 불러오기</button><button class="btn sm" onclick="exportCSV()">지출내역 CSV(엑셀)</button><button class="btn sm" onclick="exportItemsCSV()">구매리스트 CSV(엑셀)</button></div>
       <div class="faint mt" style="font-size:12px">기록 ${COLS.reduce((s, c) => s + (c === 'project' ? 0 : DB[c].length), 0)}건 · 약 ${(bytes / 1024).toFixed(0)}KB (사진 원본 제외)</div>
     </div>
     <div class="card"><div class="card-t" style="margin-bottom:10px">⚠️ 초기화</div>
@@ -1461,6 +1699,12 @@ document.getElementById('importPick').addEventListener('change', async e => {
   } catch (err) { toast('불러오기 실패: ' + err.message, 'err'); }
   e.target.value = '';
 });
+function exportItemsCSV() {
+  const head = ['구분', '공간', '품목', '브랜드·모델', '수량', '예상단가', '예상금액', '상태', '우선순위', '실제구매금액', '구매일', '구매처', '링크', '메모'];
+  const q = v => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`;
+  const rows = sortedItems(DB.item).map(it => [it.group, it.room, it.name, it.model, num(it.qty || 1), num(it.estPrice), itemEst(it), it.status, it.priority, it.actual === '' || it.actual == null ? '' : num(it.actual), it.buyDate, it.store, it.url, it.memo].map(q).join(','));
+  download(`세컨하우스_구매리스트_${today()}.csv`, '\uFEFF' + [head.map(q).join(','), ...rows].join('\n'), 'text/csv');
+}
 function exportCSV() {
   const head = ['날짜', '상태', '내용', '분류', '업체', '공정', '금액', '결제수단', '메모'];
   const q = v => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`;
@@ -1484,6 +1728,9 @@ function fieldHtml(f, v) {
     const opts = f.t === 'ref' ? [['', '- 선택 안함 -'], ...refOpts(f.ref)] : (typeof f.opts === 'function' ? f.opts() : f.opts).map(o => [o, o || '-']);
     if (v && !opts.some(o => o[0] === v)) opts.push([v, f.t === 'ref' ? '(삭제됨)' : v]);
     inp = `<select id="${id}">${f.t === 'select' && !f.def && !opts.some(o => o[0] === '') ? '<option value="">- 선택 -</option>' : ''}${opts.map(([k, l]) => `<option value="${esc(k)}" ${String(v) === String(k) ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
+  } else if (f.t === 'combo') {
+    const opts = typeof f.opts === 'function' ? f.opts() : f.opts;
+    inp = `<input id="${id}" list="${id}_dl" value="${esc(v)}" autocomplete="off" placeholder="선택 또는 직접 입력"><datalist id="${id}_dl">${opts.map(o => `<option value="${esc(o)}">`).join('')}</datalist>`;
   } else if (f.t === 'area') {
     const m2 = v === '' ? '' : fmtA(v), py = v === '' ? '' : fmtA(num(v) / PY);
     inp = `<div class="area2">
@@ -1568,8 +1815,10 @@ function submitForm(col, id, isNew) {
   if (col === 'phase') { if (num(vals.progress) >= 100 && vals.status !== '보류') vals.status = '완료'; if (vals.status === '완료') vals.progress = 100; }
   const autoTodo = col === 'meeting' && isNew && document.getElementById('f__todo') && document.getElementById('f__todo').checked;
   const base = !isNew ? byId(col, id) || {} : (id ? { id } : {});
+  if (col === 'item' && vals.url && !/^https?:\/\//.test(vals.url)) vals.url = 'https://' + vals.url;
   const rec = upsert(col, Object.assign({}, base, vals));
   closeSheet();
+  if (col === 'item') { const m = afterItemSave(rec, base.status); render(); toast(m); return; }
   let msg = '저장했어요';
   if (autoTodo) { const n = actionsToTodos(rec.id, true); if (n) msg += ` · 할일 ${n}개 등록`; }
   render();
@@ -1580,6 +1829,7 @@ function delRec(col, id) {
   let warn = '';
   if (col === 'vendor') { const n = DB.expense.filter(e => e.vendorId === id).length; if (n) warn = `\n(연결된 지출 ${n}건은 남고 업체 표시만 사라집니다)`; }
   if (col === 'meeting') { const n = filesOf('meeting', id).length; if (n) warn = `\n(첨부 ${n}개는 사진·자료에 남습니다)`; }
+  if (col === 'item' && (byId('item', id) || {}).expenseId) warn = '\n(이미 기록된 지출은 남습니다)';
   if (!confirm(`이 ${TITLES[col]}을(를) 삭제할까요?${warn}`)) return;
   removeRec(col, id);
   closeSheet(); render(); toast('삭제했어요');
@@ -1629,6 +1879,8 @@ function openQuick() {
       <button onclick="openForm('todo')"><span>✅</span>할일</button>
       <button onclick="openForm('vendor')"><span>🤝</span>업체</button>
       <button onclick="openForm('expense',null,{status:'지급예정'})"><span>🗓️</span>지급 예정</button>
+      <button onclick="openForm('item')"><span>🛒</span>구매 항목</button>
+      <button onclick="S.cost='items';go('cost')"><span>📋</span>구매리스트 보기</button>
     </div>`);
 }
 let toastTimer;
@@ -1692,10 +1944,15 @@ function compactOps(ops) {
   ops.forEach(o => { const k = o.col + ':' + (o.op === 'delete' ? o.id : o.rec.id); m.delete(k); m.set(k, o); });
   return [...m.values()];
 }
+function toServerOp(o) {
+  const sc = SERVER_COL[o.col];
+  if (!sc) return o;
+  return o.op === 'delete' ? { op: 'delete', col: sc, id: o.id } : { op: 'upsert', col: sc, rec: Object.assign({}, o.rec, { _t: o.col }) };
+}
 async function flush() {
   if (!PENDING.length) return;
   const n = PENDING.length;
-  const ops = compactOps(PENDING.slice(0, n));
+  const ops = compactOps(PENDING.slice(0, n)).map(toServerOp);
   for (let i = 0; i < ops.length; i += 100) await api({ action: 'batch', ops: ops.slice(i, i + 100) });
   PENDING.splice(0, n);
   await persist();
@@ -1733,7 +1990,14 @@ async function sync(manual) {
     await flush();
     const j = await api({ action: 'readAll' });
     const localOnly = DB.file.filter(f => f.local);
-    COLS.forEach(c => { if (Array.isArray(j.data && j.data[c])) DB[c] = j.data[c].map(r => norm(c, r)); });
+    const data = Object.assign({}, j.data || {});
+    // '예산' 시트에 함께 저장된 구매리스트를 분리
+    Object.entries(SERVER_COL).forEach(([c, sc]) => {
+      const rows = Array.isArray(data[sc]) ? data[sc] : [];
+      data[c] = rows.filter(r => r._t === c).map(r => { const o = Object.assign({}, r); delete o._t; return o; });
+      data[sc] = rows.filter(r => !r._t || r._t === sc);
+    });
+    COLS.forEach(c => { if (Array.isArray(data[c])) DB[c] = data[c].map(r => norm(c, r)); });
     localOnly.forEach(f => { if (!byId('file', f.id)) DB.file.push(f); });
     const d = new Date();
     CFG.lastSync = `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
@@ -1750,6 +2014,12 @@ async function sync(manual) {
 }
 
 /* ═══════════════════ 시작 ═══════════════════ */
+let lastWide = null;
+window.addEventListener('resize', () => {
+  const w = isWide();
+  if (lastWide !== null && w !== lastWide && S.page === 'cost' && S.cost === 'items' && !document.querySelector('.sheet')) render();
+  lastWide = w;
+});
 (async function init() {
   await loadState();
   render();
