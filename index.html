@@ -411,7 +411,7 @@ table.tb tr.click { cursor: pointer; }
 
 <script>
 'use strict';
-const APP_VER = '1.4.0';
+const APP_VER = '1.5.0';
 
 /* ═══════════════════ 상수 ═══════════════════ */
 const COLS = ['project','phase','budget','expense','vendor','meeting','todo','file','item','loan'];
@@ -430,9 +430,9 @@ const PRIO = ['높음','보통','낮음'];
 const RATING = ['','★','★★','★★★','★★★★','★★★★★'];
 const PALETTE = ['#2F6B4F','#C9772B','#3182F6','#8E5BD6','#E5484D','#0FA3A3','#D4A017','#6B7280','#DB5E9B','#7A8B2E'];
 const PY = 3.3058;
-const ITEM_GROUPS = ['가전','가구','조명','커튼·블라인드','주방·생활용품','침구·패브릭','욕실용품','외부·캠핑','인테리어 옵션','기타'];
-const GROUP_CAT = { '가전':'가구·가전', '가구':'가구·가전', '조명':'전기·통신', '커튼·블라인드':'내장·마감', '주방·생활용품':'가구·가전', '침구·패브릭':'가구·가전', '욕실용품':'주방·욕실', '외부·캠핑':'조경·외부', '인테리어 옵션':'내장·마감' };
-const GROUP_ICON = { '가전':'📺', '가구':'🛋️', '조명':'💡', '커튼·블라인드':'🪟', '주방·생활용품':'🍳', '침구·패브릭':'🛏️', '욕실용품':'🧴', '외부·캠핑':'🏕️', '인테리어 옵션':'🎨', '기타':'📦' };
+const ITEM_GROUPS = ['가전','가구','조명','커튼·블라인드','주방·생활용품','침구·패브릭','욕실용품','외부·캠핑','인테리어 옵션','조경','설비·난방','기타'];
+const GROUP_CAT = { '가전':'가구·가전', '가구':'가구·가전', '조명':'전기·통신', '커튼·블라인드':'내장·마감', '주방·생활용품':'가구·가전', '침구·패브릭':'가구·가전', '욕실용품':'주방·욕실', '외부·캠핑':'조경·외부', '인테리어 옵션':'내장·마감', '조경':'조경·외부', '설비·난방':'설비(배관·냉난방)' };
+const GROUP_ICON = { '가전':'📺', '가구':'🛋️', '조명':'💡', '커튼·블라인드':'🪟', '주방·생활용품':'🍳', '침구·패브릭':'🛏️', '욕실용품':'🧴', '외부·캠핑':'🏕️', '인테리어 옵션':'🎨', '조경':'🌿', '설비·난방':'🔥', '기타':'📦' };
 const ROOMS = ['거실','주방·다이닝','안방','자녀방','다락','욕실','현관','다용도실','외부·데크','공용'];
 const ITEM_STATUS = ['검토중','결정','주문','구매완료','보류'];
 const ITEM_PRIO = ['필수','희망','나중에'];
@@ -476,6 +476,7 @@ const F = {
     { k:'saleArea', l:'분양면적', t:'area' },
     { k:'roadShare', l:'도로지분', t:'area' },
     { k:'exclArea', l:'전용면적', t:'area' },
+    { k:'buildArea', l:'건축면적 (건물이 땅을 차지하는 면적)', t:'area' },
     { k:'floorArea', l:'연면적 (건물 바닥면적 합계)', t:'area' },
     { k:'totalBudget', l:'총 예산(원)', t:'money' },
     { k:'cashReady', l:'준비된 현금 (자기자금)', t:'money', hint:'공사에 쓸 수 있도록 마련해 둔 현금 — 자금계획에서 부족/여유를 계산해요' },
@@ -1032,6 +1033,8 @@ function vItems() {
   h += `<div class="row wrap" style="margin-bottom:10px;gap:6px">
       <button class="btn p sm" onclick="openForm('item')">＋ 항목</button>
       <button class="btn sm" onclick="openApplyBudget()">📊 예산에 반영</button>
+      <button class="btn sm" onclick="openLandPlan()">🌿 조경 계획</button>
+      <button class="btn sm" onclick="openHeatPlan()">🔥 LPG 난방 계산</button>
       <button class="btn sm" onclick="openItemTemplate()">📋 기본 리스트 불러오기</button>
       <button class="btn sm" onclick="exportItemsCSV()">⬇ 엑셀(CSV)</button>
     </div>
@@ -1247,6 +1250,172 @@ function applyListBudget() {
   APPLY = null;
   closeSheet(); render();
   toast(`${n}개 분류 예산에 반영했어요`);
+}
+
+/* ═══════════════════ 조경 계획 도우미 ═══════════════════ */
+// 단가는 2026년 국내 시공 사례 기준 대략치 — 견적 받으면 구매리스트에서 수정
+const LAND_DECK = { '방부목': 450000, '합성목(WPC)': 750000, '세라믹·석재': 1000000 };
+const LAND_SPA = { '보급형 (4인)': 8000000, '중급형 (5~6인)': 15000000, '고급형 (6인+·수입)': 25000000 };
+const LAND_EXTRA = [
+  ['drain', '배수 (유공관·집수정)', 1500000, 1],
+  ['tap', '외부 수전 (수돗가)', 700000, 1],
+  ['plant', '포인트 식재 (관목·화분)', 2000000, 1],
+  ['grade', '토사 정리·평탄화', 1500000, 0],
+  ['fence', '펜스·대문', 3000000, 0],
+];
+function jsonField(k, def) { try { const v = proj()[k]; return Object.assign({}, def, typeof v === 'string' ? JSON.parse(v || '{}') : (v || {})); } catch (e) { return Object.assign({}, def); } }
+const LAND_DEF = { build: 19, deck: 10, deckType: '합성목(WPC)', pergola: 6, pergolaCost: 5000000, garden: 3, gardenUnit: 150000, paving: 5, pavingUnit: 200000, gravelUnit: 70000, spa: 1, spaType: '중급형 (5~6인)', spaInstall: 2000000, extra: Object.fromEntries(LAND_EXTRA.map(x => [x[0], x[3]])) };
+function openLandPlan() {
+  const p = proj(), lp = jsonField('landPlan', LAND_DEF);
+  lp.extra = Object.assign({}, LAND_DEF.extra, lp.extra || {});
+  if (num(p.buildArea)) lp.build = +(num(p.buildArea) / PY).toFixed(2);
+  const excl = num(p.exclArea) ? +(num(p.exclArea) / PY).toFixed(2) : '';
+  const nf = (id, v, unit, w) => `<div class="unit" style="${w ? 'width:' + w : ''}"><input id="${id}" inputmode="decimal" value="${v === '' ? '' : v}" oninput="calcLand()" style="width:100%;padding-right:36px"><span>${unit}</span></div>`;
+  const mf = (id, v) => `<input id="${id}" class="money" inputmode="numeric" value="${num(v) ? fmtN(v) : ''}" oninput="calcLand()" placeholder="0">`;
+  openSheet(`<div class="sheet-h"><h3>🌿 조경 계획</h3></div>
+    <div class="card-s" style="margin-bottom:12px;line-height:1.6">땅(전용면적)에서 건물·데크·파고라·텃밭·보도블럭을 빼고 <b>나머지는 자갈</b>로 계산해요. 단가는 2026년 기준 대략치라 견적을 받으면 고치세요.</div>
+    <div class="frow"><div class="fld"><label>전용면적 (땅)</label>${nf('lp_excl', excl, '평')}</div><div class="fld"><label>건축면적 (건물)</label>${nf('lp_build', lp.build, '평')}</div></div>
+    <div class="frow"><div class="fld"><label>데크 면적</label>${nf('lp_deck', lp.deck, '평')}</div><div class="fld"><label>데크 재질</label><select id="lp_deckType" onchange="calcLand()">${Object.entries(LAND_DECK).map(([k, v]) => `<option value="${k}" ${lp.deckType === k ? 'selected' : ''}>${k} · 평당 ${fmtW(v)}</option>`).join('')}</select></div></div>
+    <div class="frow"><div class="fld"><label>파고라 면적</label>${nf('lp_pergola', lp.pergola, '평')}</div><div class="fld"><label>파고라 비용(원)</label>${mf('lp_pergolaCost', lp.pergolaCost)}</div></div>
+    <div class="frow"><div class="fld"><label>텃밭</label>${nf('lp_garden', lp.garden, '평')}</div><div class="fld"><label>텃밭 평당(원)</label>${mf('lp_gardenUnit', lp.gardenUnit)}</div></div>
+    <div class="frow"><div class="fld"><label>보도블럭·디딤석</label>${nf('lp_paving', lp.paving, '평')}</div><div class="fld"><label>보도블럭 평당(원)</label>${mf('lp_pavingUnit', lp.pavingUnit)}</div></div>
+    <div class="fld"><label>자갈 평당(원) <span class="faint" style="font-weight:600">— 부직포+쇄석/백자갈 5cm+시공</span></label>${mf('lp_gravelUnit', lp.gravelUnit)}</div>
+    <div class="box" style="margin-bottom:14px">
+      <label class="row" style="cursor:pointer;font-weight:700"><input type="checkbox" id="lp_spa" ${lp.spa ? 'checked' : ''} onchange="calcLand()" style="width:20px;height:20px"> 🛁 뒷마당 자쿠지 (야외 스파)</label>
+      <div class="frow mt"><div class="fld" style="margin:0"><label>제품</label><select id="lp_spaType" onchange="calcLand()">${Object.entries(LAND_SPA).map(([k, v]) => `<option value="${k}" ${lp.spaType === k ? 'selected' : ''}>${k} · ${fmtW(v)}</option>`).join('')}</select></div>
+      <div class="fld" style="margin:0"><label>기초·전용전기·운반(원)</label>${mf('lp_spaInstall', lp.spaInstall)}</div></div>
+    </div>
+    <div class="sec-t" style="margin-top:0">추가로 챙길 것</div>
+    ${LAND_EXTRA.map(([k, l, v]) => `<label class="row" style="padding:7px 0;cursor:pointer;font-size:14px"><input type="checkbox" class="lp_ex" value="${k}" ${lp.extra[k] ? 'checked' : ''} onchange="calcLand()" style="width:18px;height:18px"><span class="grow">${l}</span><span class="faint num">${fmtW(v)}</span></label>`).join('')}
+    <div class="sec-t">예상 비용</div>
+    <div id="lpOut"></div>
+    <div class="sheet-btns"><button class="btn" onclick="closeSheet()">닫기</button><button class="btn p" onclick="applyLandPlan()">🛒 구매리스트에 추가</button></div>`);
+  calcLand();
+}
+function readLand() {
+  const g = id => { const el = document.getElementById(id); return el ? num(el.value) : 0; };
+  return {
+    excl: g('lp_excl'), build: g('lp_build'), deck: g('lp_deck'), deckType: document.getElementById('lp_deckType').value,
+    pergola: g('lp_pergola'), pergolaCost: g('lp_pergolaCost'), garden: g('lp_garden'), gardenUnit: g('lp_gardenUnit'),
+    paving: g('lp_paving'), pavingUnit: g('lp_pavingUnit'), gravelUnit: g('lp_gravelUnit'),
+    spa: document.getElementById('lp_spa').checked ? 1 : 0, spaType: document.getElementById('lp_spaType').value, spaInstall: g('lp_spaInstall'),
+    extra: Object.fromEntries([...document.querySelectorAll('.lp_ex')].map(x => [x.value, x.checked ? 1 : 0])),
+  };
+}
+function landRows(v) {
+  const gravel = +(v.excl - v.build - v.deck - v.pergola - v.garden - v.paving).toFixed(2);
+  // [품목, 수량(평), 단가, 공간, 일괄금액 여부, 고유키]
+  const rows = [
+    ['데크 (' + v.deckType + ')', v.deck, LAND_DECK[v.deckType], '외부·데크', false, 'deck'],
+    ['파고라' + (v.pergola ? ` (약 ${v.pergola}평)` : ''), v.pergola || v.pergolaCost ? 1 : 0, v.pergolaCost, '외부·데크', true, 'pergola'],
+    ['자갈 포설 (부직포 포함)', Math.max(0, gravel), v.gravelUnit, '외부·데크', false, 'gravel'],
+    ['보도블럭·디딤석', v.paving, v.pavingUnit, '외부·데크', false, 'paving'],
+    ['텃밭 (틀밭·흙)', v.garden, v.gardenUnit, '외부·데크', false, 'garden'],
+  ];
+  if (v.spa) rows.push(['자쿠지 · ' + v.spaType, 1, LAND_SPA[v.spaType], '뒷마당', true, 'spa'], ['자쿠지 기초·전용전기·운반', 1, v.spaInstall, '뒷마당', true, 'spaInst']);
+  LAND_EXTRA.forEach(([k, l, amt]) => { if (v.extra[k]) rows.push([l, 1, amt, '외부·데크', true, k]); });
+  return { rows: rows.filter(r => r[1] > 0 && r[2] > 0), gravel };
+}
+function calcLand() {
+  const v = readLand(), out = document.getElementById('lpOut'); if (!out) return;
+  const { rows, gravel } = landRows(v);
+  const total = rows.reduce((s, r) => s + r[1] * r[2], 0);
+  const outer = v.excl - v.build;
+  out.innerHTML = `${!v.excl ? `<div class="box" style="background:var(--yellow-l);font-size:13px;margin-bottom:8px">전용면적을 넣으면 자갈 면적이 자동으로 계산돼요</div>` : gravel < 0 ? `<div class="box" style="background:var(--red-l);font-size:13px;margin-bottom:8px">면적 합계가 땅보다 <b>${fmtA(-gravel)}평</b> 많아요 — 숫자를 확인하세요</div>` : `<div class="box" style="font-size:13px;margin-bottom:8px">마당 ${fmtA(outer)}평 = 데크 ${fmtA(v.deck)} + 파고라 ${fmtA(v.pergola)} + 텃밭 ${fmtA(v.garden)} + 보도블럭 ${fmtA(v.paving)} + <b>자갈 ${fmtA(gravel)}평</b></div>`}
+    <div class="tb-wrap"><table class="tb">${rows.map(r => `<tr><td>${esc(r[0])}</td><td class="right num faint">${r[4] ? '' : fmtA(r[1]) + '평 × ' + fmtW(r[2])}</td><td class="right num"><b>${fmtW(r[1] * r[2])}</b></td></tr>`).join('')}
+    <tr><td><b>합계</b></td><td></td><td class="right num"><b style="font-size:16px">${fmtW(total)}</b></td></tr></table></div>`;
+}
+function applyLandPlan() {
+  const v = readLand();
+  const { rows } = landRows(v);
+  if (!rows.length) return toast('추가할 항목이 없어요', 'err');
+  // 계획값 저장 (다른 기기에서도 이어서 수정)
+  const p = Object.assign({}, proj(), { id: 'main', landPlan: JSON.stringify(Object.assign({}, v, { excl: undefined })) });
+  if (v.excl) p.exclArea = +(v.excl * PY).toFixed(2);
+  if (v.build) p.buildArea = +(v.build * PY).toFixed(2);
+  upsert('project', p);
+  let add = 0, upd = 0, del = 0;
+  const keys = new Set(rows.map(r => r[5]));
+  rows.forEach(([name, qty, unit, room, , key]) => {
+    const ex = DB.item.find(it => it.src === 'land' && it.srcKey === key);
+    if (ex && itemBought(ex)) return;
+    const rec = { group: '조경', name, room, qty: +(+qty).toFixed(2), estPrice: unit, src: 'land', srcKey: key };
+    if (ex) { upsert('item', Object.assign({}, ex, rec)); upd++; }
+    else { upsert('item', Object.assign({ status: '검토중', priority: '필수' }, rec)); add++; }
+  });
+  // 계획에서 뺀 항목(아직 안 산 것)은 리스트에서도 정리
+  DB.item.filter(it => it.src === 'land' && !keys.has(it.srcKey) && !itemBought(it)).forEach(it => { removeRec('item', it.id); del++; });
+  closeSheet(); S.cost = 'items'; S.iStatus = 'all'; S.iGroupBy = 'group'; go('cost');
+  toast(`조경 항목 ${add}개 추가${upd ? ` · ${upd}개 갱신` : ''}${del ? ` · ${del}개 정리` : ''}했어요`);
+}
+
+/* ═══════════════════ LPG 난방 계산 ═══════════════════ */
+// 연료 kg당 유효 열량: 프로판 약 12.8kWh/kg × 콘덴싱보일러 효율 0.9
+const LPG_KWH = 12.8 * 0.9;
+const HEAT_INS = { '패시브급 (아주 좋음)': 45, '신축 기준 (좋음)': 90, '보통': 140 };
+const HEAT_USE = { '상주 (매일 거주)': [1.0, 240], '주말 위주 (주 2~3일)': [0.55, 110], '가끔 (월 1~2회)': [0.35, 60] };
+const HEAT_MONTH = [22, 17, 12, 5, 1, 0, 0, 0, 0, 4, 10, 18]; // 1~12월 난방 비중(%) — 중부지방 대략
+const HEAT_DEF = { area: '', ins: '신축 기준 (좋음)', use: '주말 위주 (주 2~3일)', price: 1550, tank: 'free', tankCost: 4000000, pipe: 1000000, boiler: 0, boilerCost: 1200000 };
+function openHeatPlan() {
+  const p = proj(), hp = jsonField('heatPlan', HEAT_DEF);
+  if (!hp.area) hp.area = num(p.floorArea) ? +(num(p.floorArea) / PY).toFixed(1) : 30;
+  openSheet(`<div class="sheet-h"><h3>🔥 LPG 벌크 난방 계산</h3></div>
+    <div class="card-s" style="margin-bottom:12px;line-height:1.6">LPG 소형저장탱크(벌크)로 난방·온수·취사를 할 때 <b>설치비</b>와 <b>연간 연료비</b>를 추정해요. 2026년 kg당 약 1,500원대 기준이며, 단열·생활습관에 따라 ±30% 이상 달라질 수 있어요.</div>
+    <div class="frow"><div class="fld"><label>난방 면적 (연면적)</label><div class="unit"><input id="hp_area" inputmode="decimal" value="${hp.area}" oninput="calcHeat()"><span>평</span></div></div>
+      <div class="fld"><label>LPG 단가</label><div class="unit"><input id="hp_price" inputmode="numeric" value="${hp.price}" oninput="calcHeat()"><span>원/kg</span></div></div></div>
+    <div class="frow"><div class="fld"><label>단열 수준</label><select id="hp_ins" onchange="calcHeat()">${Object.keys(HEAT_INS).map(k => `<option ${hp.ins === k ? 'selected' : ''}>${k}</option>`).join('')}</select></div>
+      <div class="fld"><label>사용 패턴</label><select id="hp_use" onchange="calcHeat()">${Object.keys(HEAT_USE).map(k => `<option ${hp.use === k ? 'selected' : ''}>${k}</option>`).join('')}</select></div></div>
+    <div class="sec-t" style="margin-top:4px">설치비</div>
+    <div class="fld"><label>벌크 탱크 (500kg)</label><select id="hp_tank" onchange="calcHeat()"><option value="free" ${hp.tank === 'free' ? 'selected' : ''}>공급업체 무상 설치·임대 (공급 약정 조건)</option><option value="buy" ${hp.tank === 'buy' ? 'selected' : ''}>직접 구매·설치</option></select></div>
+    <div class="frow"><div class="fld"><label>탱크 구매·설치(원)</label><input id="hp_tankCost" class="money" inputmode="numeric" value="${fmtN(hp.tankCost)}" oninput="calcHeat()"></div>
+      <div class="fld"><label>배관·기초·안전검사(원)</label><input id="hp_pipe" class="money" inputmode="numeric" value="${fmtN(hp.pipe)}" oninput="calcHeat()"></div></div>
+    <label class="row" style="font-size:14px;cursor:pointer;margin-bottom:6px"><input type="checkbox" id="hp_boiler" ${hp.boiler ? 'checked' : ''} onchange="calcHeat()" style="width:18px;height:18px"> LPG 콘덴싱 보일러도 따로 사요 <span class="faint" style="font-size:12px">(보통 시공사 설비공사에 포함)</span></label>
+    <div class="fld"><input id="hp_boilerCost" class="money" inputmode="numeric" value="${fmtN(hp.boilerCost)}" oninput="calcHeat()" aria-label="보일러 비용"></div>
+    <div id="hpOut"></div>
+    <div class="sheet-btns"><button class="btn" onclick="closeSheet()">닫기</button><button class="btn p" onclick="applyHeatPlan()">🛒 설치비를 구매리스트에 추가</button></div>`);
+  calcHeat();
+}
+function readHeat() {
+  const g = id => num((document.getElementById(id) || {}).value);
+  return { area: g('hp_area'), price: g('hp_price'), ins: document.getElementById('hp_ins').value, use: document.getElementById('hp_use').value,
+    tank: document.getElementById('hp_tank').value, tankCost: g('hp_tankCost'), pipe: g('hp_pipe'), boiler: document.getElementById('hp_boiler').checked ? 1 : 0, boilerCost: g('hp_boilerCost') };
+}
+function heatCalc(v) {
+  const m2 = v.area * PY;
+  const [factor, baseKg] = HEAT_USE[v.use];
+  const heatKg = m2 * HEAT_INS[v.ins] * factor / LPG_KWH;
+  const yearKg = heatKg + baseKg;
+  const month = HEAT_MONTH.map(pc => heatKg * pc / 100 + baseKg / 12);
+  const setup = (v.tank === 'buy' ? v.tankCost : 0) + v.pipe + (v.boiler ? v.boilerCost : 0);
+  return { heatKg, yearKg, yearCost: yearKg * v.price, month, peakKg: Math.max(...month), setup };
+}
+function calcHeat() {
+  const out = document.getElementById('hpOut'); if (!out) return;
+  const v = readHeat(), r = heatCalc(v);
+  const mx = Math.max(...r.month) || 1;
+  out.innerHTML = `<div class="grid g2" style="margin-bottom:12px"><div class="box kpi"><div class="l">설치비</div><div class="v" style="font-size:18px">${fmtW(r.setup)}</div><div class="s">${v.tank === 'free' ? '탱크 무상 · ' : ''}배관·검사${v.boiler ? '·보일러' : ''}</div></div>
+    <div class="box kpi"><div class="l">연간 연료비</div><div class="v" style="font-size:18px;color:var(--accent)">${fmtW(r.yearCost)}</div><div class="s">약 ${fmtN(r.yearKg)}kg / 년</div></div></div>
+    <div class="vbars" style="height:130px">${r.month.map((kg, i) => `<div class="col"><div class="v">${kg * v.price >= 10000 ? fmtW(kg * v.price).replace('만', '') : ''}</div><i style="height:${kg / mx * 100}%;background:${[0, 1, 11].includes(i) ? 'var(--accent)' : 'var(--primary)'}"></i><div class="x">${i + 1}</div></div>`).join('')}</div>
+    <div class="faint" style="font-size:12px;margin:4px 0 10px">월별 연료비(만원) · 한겨울(1월) 약 <b>${fmtW(r.month[0] * v.price)}</b> · 500kg 탱크 ${r.peakKg > 0 ? `한겨울엔 약 ${Math.max(1, Math.round(425 / r.peakKg * 30))}일마다 충전` : ''}</div>
+    <div class="box" style="font-size:12.5px;line-height:1.7">💡 세컨하우스는 비어 있을 때도 <b>동파 방지용 외출모드(10~15℃)</b> 난방이 필요해서 사용 일수보다 연료비가 더 나와요. 단열·창호 등급이 연료비에 가장 크게 영향을 줘요.</div>`;
+}
+function applyHeatPlan() {
+  const v = readHeat(), r = heatCalc(v);
+  upsert('project', Object.assign({}, proj(), { id: 'main', heatPlan: JSON.stringify(v) }));
+  const rows = [];
+  if (v.tank === 'buy') rows.push(['LPG 벌크 탱크 (500kg)', v.tankCost, '직접 구매·설치']);
+  rows.push(['LPG 배관·기초·안전검사', v.pipe, '가스 배관, 탱크 기초 패드, 완성검사' + (v.tank === 'free' ? ' · 탱크는 공급업체 무상 설치(공급 약정 기간·kg 단가 확인)' : '')]);
+  if (v.tank === 'free') { const t0 = DB.item.find(it => it.group === '설비·난방' && it.name === 'LPG 벌크 탱크 (500kg)' && !itemBought(it)); if (t0) removeRec('item', t0.id); }
+  if (v.boiler) rows.push(['LPG 콘덴싱 보일러', v.boilerCost, '']);
+  let n = 0;
+  rows.forEach(([name, amt, memo]) => {
+    const ex = DB.item.find(it => it.group === '설비·난방' && it.name === name);
+    if (ex && itemBought(ex)) return;
+    const rec = { group: '설비·난방', name, room: '외부·데크', qty: 1, estPrice: amt, memo: memo + ` · 예상 연료비 연 ${fmtW(r.yearCost)}`, src: 'heat' };
+    upsert('item', Object.assign(ex ? {} : { status: '검토중', priority: '필수' }, ex || {}, rec)); n++;
+  });
+  closeSheet(); S.cost = 'items'; S.iStatus = 'all'; go('cost');
+  toast(`난방 설치비 ${n}개를 구매리스트에 넣었어요 · 연료비 연 ${fmtW(r.yearCost)} 예상`);
 }
 
 function openGroupBudget(g) {
