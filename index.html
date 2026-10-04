@@ -409,7 +409,7 @@ table.tb tr.click { cursor: pointer; }
 
 <script>
 'use strict';
-const APP_VER = '1.2.0';
+const APP_VER = '1.3.0';
 
 /* ═══════════════════ 상수 ═══════════════════ */
 const COLS = ['project','phase','budget','expense','vendor','meeting','todo','file','item'];
@@ -697,10 +697,12 @@ function costTotals() {
 }
 function byCategory() {
   const m = {};
-  cats().forEach(c => m[c] = { cat: c, budget: 0, paid: 0, planned: 0 });
-  costBudgets().forEach(b => { const c = b.category || '기타'; (m[c] = m[c] || { cat: c, budget: 0, paid: 0, planned: 0 }).budget += num(b.amount); });
-  DB.expense.forEach(e => { const c = e.category || '기타'; const o = (m[c] = m[c] || { cat: c, budget: 0, paid: 0, planned: 0 }); if (e.status === '지급예정') o.planned += num(e.amount); else o.paid += num(e.amount); });
-  return Object.values(m).filter(o => o.budget || o.paid || o.planned);
+  const mk = c => (m[c] = m[c] || { cat: c, budget: 0, paid: 0, planned: 0, list: 0, fromList: 0 });
+  cats().forEach(mk);
+  costBudgets().forEach(b => { const o = mk(b.category || '기타'); o.budget += num(b.amount); if (b.fromList) o.fromList += num(b.amount); });
+  DB.expense.forEach(e => { const o = mk(e.category || '기타'); if (e.status === '지급예정') o.planned += num(e.amount); else o.paid += num(e.amount); });
+  DB.item.forEach(it => { if (!['구매완료', '보류'].includes(it.status) && !it.expenseId) mk(catOfGroup(it.group)).list += itemEst(it); });
+  return Object.values(m).filter(o => o.budget || o.paid || o.planned || o.list);
 }
 function phaseProgress() {
   const ps = DB.phase.filter(p => p.status !== '보류');
@@ -919,17 +921,19 @@ function vBudget() {
     h += `<div class="card box" style="background:var(--yellow-l);color:var(--text);font-size:13px">총 예산 ${fmtW(proj().totalBudget)} · 분류별 예산 합계 ${fmtW(t.catBudget)} → 미배정 <b>${fmtW(num(proj().totalBudget) - t.catBudget)}</b></div>`;
   }
   if (t.listRemain) h += `<div class="card"><div class="between"><div><div class="card-t">예상 총비용</div><div class="card-s">지급완료 ${fmtW(t.paid)} + 지급예정 ${fmtW(t.planned)} + 구매리스트 남은 예상 ${fmtW(t.listRemain)}</div></div><div class="right"><div style="font-size:22px;font-weight:800" class="${t.budget && t.forecast > t.budget ? 'red' : ''}">${fmtW(t.forecast)}</div>${t.budget ? `<div class="card-s">예산 대비 ${t.forecast > t.budget ? '초과 ' + fmtW(t.forecast - t.budget) : '여유 ' + fmtW(t.budget - t.forecast)}</div>` : ''}</div></div></div>`;
-  h += `<div class="card"><div class="card-h"><div class="card-t">분류별 예산 대비 집행</div><button class="btn sm p" onclick="openForm('budget')">＋ 예산</button></div>`;
+  h += listBudgetBanner();
+  h += `<div class="card"><div class="card-h"><div class="card-t">분류별 예산 대비 집행</div><div class="row" style="gap:6px">${DB.item.length ? `<button class="btn sm" onclick="openApplyBudget()">🛒 리스트 반영</button>` : ''}<button class="btn sm p" onclick="openForm('budget')">＋ 예산</button></div></div>`;
   if (!rows.length) return h + `<div class="empty"><div class="e">📊</div>분류별 예산을 입력하면<br>집행률을 한눈에 볼 수 있어요</div></div>`;
   h += rows.map(r => {
-    const base = Math.max(r.budget, r.paid + r.planned) || 1;
+    const base = Math.max(r.budget, r.paid + r.planned + r.list) || 1;
     const over = r.budget && r.paid + r.planned > r.budget;
+    const overF = r.budget && !over && r.paid + r.planned + r.list > r.budget;
     const bIds = costBudgets().filter(b => (b.category || '기타') === r.cat).map(b => b.id);
     return `<div style="padding:12px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="${bIds.length ? `openForm('budget','${bIds[0]}')` : `openForm('budget',null,{category:'${esc(r.cat)}'})`}">
-      <div class="between"><div class="row"><span>${catIcon(r.cat)}</span><b style="font-size:14px">${esc(r.cat)}</b>${over ? '<span class="badge r">초과</span>' : ''}</div>
+      <div class="between"><div class="row"><span>${catIcon(r.cat)}</span><b style="font-size:14px">${esc(r.cat)}</b>${over ? '<span class="badge r">초과</span>' : overF ? '<span class="badge y">초과 예상</span>' : ''}${r.fromList ? '<span class="badge b" title="구매리스트에서 반영된 예산 포함">🛒</span>' : ''}</div>
         <div class="num" style="font-size:13px"><b>${fmtW(r.paid + r.planned)}</b> <span class="muted">/ ${r.budget ? fmtW(r.budget) : '예산없음'}</span></div></div>
-      <div class="bar mt" style="margin-top:8px"><i style="width:${r.paid / base * 100}%;background:${over ? 'var(--red)' : 'var(--primary)'}"></i><i style="width:${r.planned / base * 100}%;background:var(--accent);opacity:.55"></i></div>
-      <div class="between faint" style="font-size:12px;margin-top:4px"><span>지급 ${fmtW(r.paid)}${r.planned ? ' · 예정 ' + fmtW(r.planned) : ''}</span><span class="${r.budget - r.paid - r.planned < 0 ? 'red' : ''}">${r.budget ? '잔여 ' + fmtW(r.budget - r.paid - r.planned) : ''}</span></div>
+      <div class="bar mt" style="margin-top:8px"><i style="width:${r.paid / base * 100}%;background:${over ? 'var(--red)' : 'var(--primary)'}"></i><i style="width:${r.planned / base * 100}%;background:var(--accent);opacity:.55"></i><i style="width:${r.list / base * 100}%;background:var(--blue);opacity:.4"></i></div>
+      <div class="between faint" style="font-size:12px;margin-top:4px"><span>지급 ${fmtW(r.paid)}${r.planned ? ' · 예정 ' + fmtW(r.planned) : ''}${r.list ? ` · <span style="color:var(--blue)">🛒 ${fmtW(r.list)}</span>` : ''}</span><span class="${r.budget - r.paid - r.planned < 0 ? 'red' : ''}">${r.budget ? '잔여 ' + fmtW(r.budget - r.paid - r.planned) : ''}</span></div>
     </div>`;
   }).join('');
   h += `<div class="between mt" style="font-size:14px"><b>합계</b><span class="num"><b>${fmtW(t.total)}</b> / ${fmtW(t.catBudget)}</span></div>`;
@@ -1012,9 +1016,11 @@ function vItems() {
   </div>`;
   h += `<div class="row wrap" style="margin-bottom:10px;gap:6px">
       <button class="btn p sm" onclick="openForm('item')">＋ 항목</button>
+      <button class="btn sm" onclick="openApplyBudget()">📊 예산에 반영</button>
       <button class="btn sm" onclick="openItemTemplate()">📋 기본 리스트 불러오기</button>
       <button class="btn sm" onclick="exportItemsCSV()">⬇ 엑셀(CSV)</button>
     </div>
+    ${listBudgetBanner()}
     <input class="search" placeholder="🔍 품목·모델·구매처 검색" value="${esc(S.iQ)}" oninput="S.iQ=this.value;renderItemList()">
     <div class="between wrap" style="margin-bottom:6px;gap:6px">
       <div class="chips" style="margin:0">${[['open', '미구매'], ['all', '전체'], ['bought', '구매완료'], ['hold', '보류']].map(([k, l]) => `<button class="chip ${S.iStatus === k ? 'on' : ''}" onclick="S.iStatus='${k}';renderItemList(true)">${l}</button>`).join('')}</div>
@@ -1121,7 +1127,7 @@ function syncItemExpense(it) {
   const amt = itemCost(it);
   if (!amt) return;
   const ex = it.expenseId && byId('expense', it.expenseId);
-  const fields = { date: it.buyDate || today(), title: [it.name, it.model].filter(Boolean).join(' '), amount: amt, category: GROUP_CAT[it.group] || '가구·가전', status: '지급완료', memo: `🛒 구매리스트${it.store ? ' · ' + it.store : ''}`, itemId: it.id };
+  const fields = { date: it.buyDate || today(), title: [it.name, it.model].filter(Boolean).join(' '), amount: amt, category: catOfGroup(it.group), status: '지급완료', memo: `🛒 구매리스트${it.store ? ' · ' + it.store : ''}`, itemId: it.id };
   if (ex) {
     if (['date', 'title', 'amount', 'category'].some(k => String(ex[k]) !== String(fields[k]))) upsert('expense', Object.assign({}, ex, fields));
   } else {
@@ -1129,6 +1135,105 @@ function syncItemExpense(it) {
     upsert('item', Object.assign({}, byId('item', it.id), { expenseId: e.id }));
   }
 }
+// ── 구매리스트 → 분류별 예산 반영
+function groupCatMap() {
+  let saved = {};
+  try { const v = proj().groupCat; saved = typeof v === 'string' ? JSON.parse(v || '{}') : (v || {}); } catch (e) {}
+  return Object.assign({}, GROUP_CAT, saved);
+}
+const catOfGroup = g => groupCatMap()[g || '기타'] || '기타';
+function listEstByCat(map) {
+  const out = {};
+  DB.item.forEach(it => { if (it.status === '보류') return; const c = (map || groupCatMap())[it.group || '기타'] || '기타'; out[c] = (out[c] || 0) + itemCost(it); });
+  return out;
+}
+// 반영된 예산과 현재 리스트 합계가 달라진 분류
+function staleListBudgets() {
+  const est = listEstByCat();
+  const rows = costBudgets().filter(b => b.fromList);
+  const diff = rows.filter(b => Math.round(num(b.amount)) !== Math.round(est[b.category] || 0));
+  const applied = new Set(rows.map(b => b.category));
+  const missing = rows.length ? Object.keys(est).filter(c => est[c] && !applied.has(c)) : [];
+  return { diff, missing, any: diff.length + missing.length > 0 };
+}
+function listBudgetBanner() {
+  if (!DB.item.length) return '';
+  const st = staleListBudgets();
+  if (!st.any) return '';
+  return `<div class="card between" style="background:var(--blue-l)"><div style="font-size:14px"><b>🛒 구매리스트가 바뀌었어요</b><div class="card-s">예산에 반영된 금액과 리스트 합계가 달라요 (${st.diff.length + st.missing.length}개 분류)</div></div><button class="btn p sm" onclick="openApplyBudget()">다시 반영</button></div>`;
+}
+let APPLY = null;
+function openApplyBudget() {
+  if (!DB.item.length) return toast('구매리스트에 항목을 먼저 추가하세요');
+  const map = groupCatMap();
+  const groups = itemGroups().filter(g => DB.item.some(it => (it.group || '기타') === g && it.status !== '보류'));
+  APPLY = { map: Object.fromEntries(groups.map(g => [g, map[g] || '기타'])), mode: {} };
+  const catOpts = [...new Set([...cats(), ...Object.values(APPLY.map)])];
+  openSheet(`<div class="sheet-h"><h3>📊 구매리스트 → 예산 반영</h3></div>
+    <div class="card-s" style="margin-bottom:12px;line-height:1.6">구매리스트 예상 합계(보류 제외, 구매완료는 실제 금액)를 <b>분류별 예산</b>에 넣어요. 리스트가 바뀌면 언제든 다시 반영할 수 있어요.</div>
+    <div class="sec-t" style="margin-top:0">① 구분 → 예산 분류</div>
+    ${groups.map(g => { const sum = DB.item.filter(it => (it.group || '기타') === g && it.status !== '보류').reduce((s, it) => s + itemCost(it), 0);
+      return `<div class="between" style="padding:8px 0;border-bottom:1px solid var(--border);gap:10px"><div class="grow ellipsis" style="font-size:14px">${GROUP_ICON[g] || '📦'} <b>${esc(g)}</b> <span class="faint num">${fmtW(sum)}</span></div>
+        <select class="cell" style="width:auto;max-width:52%;text-align:left" onchange="APPLY.map['${esc(g)}']=this.value;drawApplyPreview()">${catOpts.map(c => `<option ${APPLY.map[g] === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></div>`; }).join('')}
+    <div class="sec-t">② 반영 결과</div>
+    <div id="applyPrev"></div>
+    <div class="sheet-btns"><button class="btn" onclick="closeSheet()">취소</button><button class="btn p" onclick="applyListBudget()">예산에 반영</button></div>`);
+  drawApplyPreview();
+}
+function drawApplyPreview() {
+  const el = document.getElementById('applyPrev'); if (!el || !APPLY) return;
+  const est = listEstByCat(Object.assign(groupCatMap(), APPLY.map));
+  const cats2 = Object.keys(est).filter(c => est[c] > 0);
+  let before = 0, after = 0;
+  const rows = cats2.map(c => {
+    const all = costBudgets().filter(b => (b.category || '기타') === c);
+    const manual = all.filter(b => !b.fromList).reduce((s, b) => s + num(b.amount), 0);
+    const cur = all.reduce((s, b) => s + num(b.amount), 0);
+    // 기본: 리스트로 반영한 적 있으면 '더하기'(직접 넣은 예산 유지), 처음이고 직접 넣은 예산이 있으면 '바꾸기'
+    const mode = APPLY.mode[c] || (manual && !all.some(b => b.fromList) ? 'replace' : 'add');
+    APPLY.mode[c] = mode;
+    const nv = mode === 'skip' ? cur : mode === 'replace' ? est[c] : manual + est[c];
+    before += cur; after += nv;
+    return `<tr><td><div style="font-weight:700">${catIcon(c)} ${esc(c)}</div><div class="faint" style="font-size:12px">리스트 ${fmtW(est[c])}${manual ? ` · 직접 입력 ${fmtW(manual)}` : ''}</div></td>
+      <td class="right num" style="white-space:nowrap"><span class="faint">${cur ? fmtW(cur) : '없음'}</span> → <b>${fmtW(nv)}</b></td>
+      <td style="width:96px"><select class="cell" style="text-align:left" onchange="APPLY.mode['${esc(c)}']=this.value;drawApplyPreview()">
+        <option value="add" ${mode === 'add' ? 'selected' : ''}>${manual ? '더하기' : '반영'}</option>
+        ${manual ? `<option value="replace" ${mode === 'replace' ? 'selected' : ''}>바꾸기</option>` : ''}
+        <option value="skip" ${mode === 'skip' ? 'selected' : ''}>제외</option></select></td></tr>`;
+  }).join('');
+  const total = num(proj().totalBudget);
+  const catAll = costBudgets().reduce((s, b) => s + num(b.amount), 0) - before + after;
+  el.innerHTML = `<div class="tb-wrap"><table class="tb">${rows}</table></div>
+    <div class="box mt" style="font-size:13px;line-height:1.7">분류별 예산 합계 <b>${fmtW(catAll)}</b>${total ? ` · 총 예산 ${fmtW(total)} → ${catAll > total ? `<b class="red">${fmtW(catAll - total)} 초과</b>` : `미배정 ${fmtW(total - catAll)}`}` : ''}
+    <div class="faint" style="font-size:12px">'더하기' = 직접 입력한 예산은 두고 리스트 금액을 더해요 · '바꾸기' = 그 분류 예산을 리스트 합계로 바꿔요</div></div>`;
+}
+function applyListBudget() {
+  if (!APPLY) return;
+  const p = proj();
+  const merged = Object.assign(groupCatMap(), APPLY.map);
+  const custom = Object.fromEntries(Object.entries(merged).filter(([g, c]) => GROUP_CAT[g] !== c));
+  upsert('project', Object.assign({}, p, { id: 'main', groupCat: JSON.stringify(custom) }));
+  const est = listEstByCat(merged);
+  let n = 0;
+  Object.keys(est).forEach(c => {
+    const mode = APPLY.mode[c] || 'add';
+    if (mode === 'skip' || !est[c]) return;
+    const all = costBudgets().filter(b => (b.category || '기타') === c);
+    if (mode === 'replace') all.filter(b => !b.fromList).forEach(b => removeRec('budget', b.id));
+    const fl = all.filter(b => b.fromList);
+    fl.slice(1).forEach(b => removeRec('budget', b.id));
+    upsert('budget', Object.assign({}, fl[0] || { category: c, fromList: 1 }, { amount: est[c], memo: `🛒 구매리스트 반영 (${today()})` }));
+    n++;
+  });
+  // 리스트에서 사라진 분류의 반영 예산 정리
+  costBudgets().filter(b => b.fromList && !est[b.category] && (APPLY.mode[b.category] || 'add') !== 'skip').forEach(b => removeRec('budget', b.id));
+  // 이미 구매해 지출로 기록된 항목도 새 분류로 맞춤
+  DB.item.filter(it => it.expenseId && byId('expense', it.expenseId)).forEach(it => syncItemExpense(it));
+  APPLY = null;
+  closeSheet(); render();
+  toast(`${n}개 분류 예산에 반영했어요`);
+}
+
 function openGroupBudget(g) {
   const b = listBudget(g);
   const cur = DB.item.filter(it => (it.group || '기타') === g && it.status !== '보류').reduce((s, it) => s + itemCost(it), 0);
@@ -1827,6 +1932,7 @@ function submitForm(col, id, isNew) {
 }
 function delRec(col, id) {
   let warn = '';
+  if (col === 'budget' && (byId('budget', id) || {}).fromList) warn = '\n(구매리스트에서 반영된 예산 — 구매리스트 탭에서 다시 반영할 수 있어요)';
   if (col === 'vendor') { const n = DB.expense.filter(e => e.vendorId === id).length; if (n) warn = `\n(연결된 지출 ${n}건은 남고 업체 표시만 사라집니다)`; }
   if (col === 'meeting') { const n = filesOf('meeting', id).length; if (n) warn = `\n(첨부 ${n}개는 사진·자료에 남습니다)`; }
   if (col === 'item' && (byId('item', id) || {}).expenseId) warn = '\n(이미 기록된 지출은 남습니다)';
