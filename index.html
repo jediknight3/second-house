@@ -411,7 +411,7 @@ table.tb tr.click { cursor: pointer; }
 
 <script>
 'use strict';
-const APP_VER = '1.5.0';
+const APP_VER = '1.5.1';
 
 /* ═══════════════════ 상수 ═══════════════════ */
 const COLS = ['project','phase','budget','expense','vendor','meeting','todo','file','item','loan'];
@@ -453,6 +453,7 @@ const ITEM_TEMPLATE = [
   ['침구·패브릭','침구 세트','공용',3,300000],['침구·패브릭','러그','거실',1,400000],
   ['욕실용품','수건·욕실소품','욕실',1,300000],
   ['외부·캠핑','바비큐 그릴','외부·데크',1,700000],['외부·캠핑','야외 테이블·의자','외부·데크',1,1000000],['외부·캠핑','파라솔·어닝','외부·데크',1,600000],
+  ['설비·난방','정화조 (오수처리시설)','외부·데크',1,8500000],
   ['외부·캠핑','정원 관리 도구','외부·데크',1,400000],['외부·캠핑','잔디깎이','외부·데크',1,500000],
 ];
 
@@ -1250,6 +1251,25 @@ function applyListBudget() {
   APPLY = null;
   closeSheet(); render();
   toast(`${n}개 분류 예산에 반영했어요`);
+}
+
+// ── 앱 업데이트로 한 번만 넣는 기본 항목 (고정 id라 여러 기기에서도 중복 없음, 지우면 다시 안 생김)
+const SEEDS = [
+  { key: 'septic', id: 'seed-septic', test: /정화조|오수처리/, rec: { group: '설비·난방', name: '정화조 (오수처리시설)', room: '외부·데크', qty: 1, estPrice: 8500000, status: '검토중', priority: '필수', memo: '양평 최근 시공 사례 약 850만 · 시공사 견적에 포함됐는지 확인 · 연 1회 청소(내부청소) 비용 별도' } },
+];
+function applySeeds() {
+  const p = proj();
+  const done = String(p.seeds || '').split(',').filter(Boolean);
+  const added = [];
+  SEEDS.forEach(sd => {
+    if (done.includes(sd.key)) return;
+    const exists = byId('item', sd.id) || DB.item.some(it => sd.test.test(it.name || '')) || DB.expense.some(e => sd.test.test(e.title || ''));
+    if (!exists) { upsert('item', Object.assign({ id: sd.id }, sd.rec)); added.push(sd.rec.name); }
+    done.push(sd.key);
+  });
+  if (done.length !== String(p.seeds || '').split(',').filter(Boolean).length) upsert('project', Object.assign({}, p, { id: 'main', seeds: done.join(',') }));
+  if (added.length) { toast(`${added.join(', ')} ${fmtW(SEEDS.find(x => x.rec.name === added[0]).rec.estPrice)}을 구매리스트에 추가했어요`); return true; }
+  return false;
 }
 
 /* ═══════════════════ 조경 계획 도우미 ═══════════════════ */
@@ -2415,7 +2435,7 @@ async function sync(manual) {
     CFG.lastSync = `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
     CFG.syncErr = 0;
     await persist();
-    if (manual) toast('동기화 완료');
+    if (!applySeeds() && manual) toast('동기화 완료');
   } catch (e) {
     CFG.syncErr = 1;
     if (manual) toast('동기화 실패: ' + e.message, 'err');
@@ -2434,6 +2454,7 @@ window.addEventListener('resize', () => {
 });
 (async function init() {
   await loadState();
+  if (!CFG.gas) applySeeds();
   render();
   if (!(await handleConnectLink()) && CFG.gas) sync(false);
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && CFG.gas) sync(false); });
