@@ -411,7 +411,7 @@ table.tb tr.click { cursor: pointer; }
 
 <script>
 'use strict';
-const APP_VER = '1.5.1';
+const APP_VER = '1.5.2';
 
 /* ═══════════════════ 상수 ═══════════════════ */
 const COLS = ['project','phase','budget','expense','vendor','meeting','todo','file','item','loan'];
@@ -787,7 +787,7 @@ function vHome() {
       <div class="list mt">
         <div class="it" onclick="openForm('project','main')"><div class="ico">1️⃣</div><div class="grow"><div class="t">프로젝트 정보 입력</div><div class="s">이름·주소·면적·총예산·입주목표일</div></div></div>
         <div class="it" onclick="loadPhaseTemplate()"><div class="ico">2️⃣</div><div class="grow"><div class="t">기본 공정 불러오기</div><div class="s">토지매입 → 설계 → 인허가 → … → 입주 (13단계)</div></div></div>
-        <div class="it" onclick="openForm('budget')"><div class="ico">3️⃣</div><div class="grow"><div class="t">분류별 예산 입력</div><div class="s">설계·골조·창호 등 항목별 예산</div></div></div>
+        <div class="it" onclick="openCatBudget()"><div class="ico">3️⃣</div><div class="grow"><div class="t">분류별 예산 입력</div><div class="s">설계·골조·창호 등 항목별 예산</div></div></div>
         <div class="it" onclick="go('settings')"><div class="ico">4️⃣</div><div class="grow"><div class="t">구글 시트 연결 (선택)</div><div class="s">폰·PC 간 동기화 + 사진 원본을 구글 드라이브에 보관</div></div></div>
       </div></div>`;
   }
@@ -939,14 +939,13 @@ function vBudget() {
   }
   if (t.listRemain) h += `<div class="card"><div class="between"><div><div class="card-t">예상 총비용</div><div class="card-s">지급완료 ${fmtW(t.paid)} + 지급예정 ${fmtW(t.planned)} + 구매리스트 남은 예상 ${fmtW(t.listRemain)}</div></div><div class="right"><div style="font-size:22px;font-weight:800;white-space:nowrap" class="${t.budget && t.forecast > t.budget ? 'red' : ''}">${fmtW(t.forecast)}</div>${t.budget ? `<div class="card-s">예산 대비 ${t.forecast > t.budget ? '초과 ' + fmtW(t.forecast - t.budget) : '여유 ' + fmtW(t.budget - t.forecast)}</div>` : ''}</div></div></div>`;
   h += listBudgetBanner();
-  h += `<div class="card"><div class="card-h"><div class="card-t">분류별 예산 대비 집행</div><div class="row" style="gap:6px">${DB.item.length ? `<button class="btn sm" onclick="openApplyBudget()">🛒 리스트 반영</button>` : ''}<button class="btn sm p" onclick="openForm('budget')">＋ 예산</button></div></div>`;
+  h += `<div class="card"><div class="card-h"><div class="card-t">분류별 예산 대비 집행</div><div class="row" style="gap:6px">${DB.item.length ? `<button class="btn sm" onclick="openApplyBudget()">🛒 리스트 반영</button>` : ''}<button class="btn sm p" onclick="openCatBudget()">＋ 예산</button></div></div>`;
   if (!rows.length) return h + `<div class="empty"><div class="e">📊</div>분류별 예산을 입력하면<br>집행률을 한눈에 볼 수 있어요</div></div>`;
   h += rows.map(r => {
     const base = Math.max(r.budget, r.paid + r.planned + r.list) || 1;
     const over = r.budget && r.paid + r.planned > r.budget;
     const overF = r.budget && !over && r.paid + r.planned + r.list > r.budget;
-    const bIds = costBudgets().filter(b => (b.category || '기타') === r.cat).map(b => b.id);
-    return `<div style="padding:12px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="${bIds.length ? `openForm('budget','${bIds[0]}')` : `openForm('budget',null,{category:'${esc(r.cat)}'})`}">
+    return `<div style="padding:12px 0;border-bottom:1px solid var(--border);cursor:pointer" data-c="${esc(r.cat)}" onclick="openCatBudget(this.dataset.c)">
       <div class="between"><div class="row"><span>${catIcon(r.cat)}</span><b style="font-size:14px">${esc(r.cat)}</b>${over ? '<span class="badge r">초과</span>' : overF ? '<span class="badge y">초과 예상</span>' : ''}${r.fromList ? '<span class="badge b" title="구매리스트에서 반영된 예산 포함">🛒</span>' : ''}</div>
         <div class="num" style="font-size:13px"><b>${fmtW(r.paid + r.planned)}</b> <span class="muted">/ ${r.budget ? fmtW(r.budget) : '예산없음'}</span></div></div>
       <div class="bar mt" style="margin-top:8px"><i style="width:${r.paid / base * 100}%;background:${over ? 'var(--red)' : 'var(--primary)'}"></i><i style="width:${r.planned / base * 100}%;background:var(--accent);opacity:.55"></i><i style="width:${r.list / base * 100}%;background:var(--blue);opacity:.4"></i></div>
@@ -1436,6 +1435,69 @@ function applyHeatPlan() {
   });
   closeSheet(); S.cost = 'items'; S.iStatus = 'all'; go('cost');
   toast(`난방 설치비 ${n}개를 구매리스트에 넣었어요 · 연료비 연 ${fmtW(r.yearCost)} 예상`);
+}
+
+// ── 분류별 예산: 한 분류 = 한 화면 (직접 입력분 + 구매리스트 반영분)
+function catBudgetRows(c) {
+  const all = costBudgets().filter(b => (b.category || '기타') === c);
+  return { manual: all.filter(b => !b.fromList), list: all.filter(b => b.fromList) };
+}
+function openCatBudget(cat) {
+  const cs = cats();
+  if (!cat) {
+    openSheet(`<div class="sheet-h"><h3>예산 추가</h3></div>
+      <div class="fld"><label>분류 <span class="req">*</span></label><select id="f_cb_cat" onchange="if(this.value)openCatBudget(this.value)"><option value="">- 분류 선택 -</option>${cs.map(c => `<option value="${esc(c)}">${catIcon(c)} ${esc(c)}${catBudgetRows(c).manual.length + catBudgetRows(c).list.length ? ' (예산 있음)' : ''}</option>`).join('')}</select>
+      <div class="hint">이미 예산이 있는 분류를 고르면 그 예산을 수정해요 (중복으로 쌓이지 않아요)</div></div>
+      <div class="sheet-btns"><button class="btn" onclick="closeSheet()">취소</button></div>`);
+    return;
+  }
+  const { manual, list } = catBudgetRows(cat);
+  const manualSum = manual.reduce((s, b) => s + num(b.amount), 0);
+  const memo = [...new Set(manual.map(b => (b.memo || '').trim()).filter(Boolean))].join('\n');
+  const listSum = list.reduce((s, b) => s + num(b.amount), 0);
+  const est = listEstByCat()[cat] || 0;
+  const used = byCategory().find(r => r.cat === cat) || { paid: 0, planned: 0 };
+  openSheet(`<div class="sheet-h"><h3>${catIcon(cat)} ${esc(cat)} 예산</h3>${manual.length + list.length ? `<button class="btn sm d" data-c="${esc(cat)}" onclick="deleteCatBudget(this.dataset.c)">삭제</button>` : ''}</div>
+    ${manual.length > 1 ? `<div class="box" style="background:var(--yellow-l);font-size:13px;margin-bottom:12px">직접 입력한 예산이 ${manual.length}줄로 나뉘어 있어서 합쳐서 보여줘요. 저장하면 한 줄로 정리돼요.</div>` : ''}
+    <div class="fld"><label>직접 입력 예산(원)</label><input id="f_cb_amt" class="money" inputmode="numeric" value="${manualSum ? fmtN(manualSum) : ''}" placeholder="0" oninput="cbTotal(${listSum})"><div class="hint" id="f_cb_amt_h">${manualSum ? fmtW(manualSum) : ''}</div></div>
+    <div class="fld"><label>메모</label><textarea id="f_cb_memo" placeholder="예) 세탁기·건조기·냉장고 포함">${esc(memo)}</textarea></div>
+    <div class="box" style="margin-bottom:12px;font-size:14px">
+      <div class="between"><span>🛒 구매리스트 반영분</span><b class="num" style="color:var(--blue)">${listSum ? fmtW(listSum) : '없음'}</b></div>
+      ${est || listSum ? `<div class="faint" style="font-size:12px;margin-top:4px">현재 구매리스트 합계 ${fmtW(est)}${listSum && Math.round(est) !== Math.round(listSum) ? ' · <span style="color:var(--accent)">반영분과 달라요</span>' : ''}</div>
+      <div class="row wrap" style="margin-top:8px;gap:6px">${est && Math.round(est) !== Math.round(listSum) ? `<button class="btn sm" data-c="${esc(cat)}" onclick="setCatListBudget(this.dataset.c,true)">${listSum ? '리스트 기준으로 다시 반영' : '구매리스트 금액 반영'}</button>` : ''}${listSum ? `<button class="btn sm" data-c="${esc(cat)}" onclick="setCatListBudget(this.dataset.c,false)">반영 해제</button>` : ''}</div>` : `<div class="faint" style="font-size:12px;margin-top:4px">이 분류로 연결된 구매리스트 항목이 없어요</div>`}
+    </div>
+    <div class="between" style="font-size:15px;padding:4px 2px"><b>${esc(cat)} 예산 합계</b><b class="num" id="cbTotal">${fmtW(manualSum + listSum)}</b></div>
+    <div class="faint" style="font-size:12px;padding:0 2px">지금까지 지급 ${fmtW(used.paid)}${used.planned ? ' · 지급예정 ' + fmtW(used.planned) : ''}</div>
+    <div class="sheet-btns"><button class="btn" onclick="closeSheet()">취소</button><button class="btn p" data-c="${esc(cat)}" onclick="saveCatBudget(this.dataset.c)">저장</button></div>`);
+}
+function cbTotal(listSum) {
+  const el = document.getElementById('cbTotal'), a = document.getElementById('f_cb_amt');
+  if (el && a) el.textContent = fmtW(num(a.value) + listSum);
+}
+function saveCatBudget(cat) {
+  const amt = num(document.getElementById('f_cb_amt').value);
+  const memo = document.getElementById('f_cb_memo').value.trim();
+  const { manual } = catBudgetRows(cat);
+  if (amt || memo) {
+    upsert('budget', Object.assign({}, manual[0] || { category: cat }, { category: cat, amount: amt, memo }));
+    manual.slice(1).forEach(b => removeRec('budget', b.id));   // 같은 분류 중복 줄 정리
+  } else manual.forEach(b => removeRec('budget', b.id));
+  closeSheet(); render(); toast(`${cat} 예산을 저장했어요`);
+}
+function setCatListBudget(cat, on) {
+  const { list } = catBudgetRows(cat);
+  if (on) {
+    const est = listEstByCat()[cat] || 0;
+    upsert('budget', Object.assign({}, list[0] || { category: cat, fromList: 1 }, { amount: est, memo: `🛒 구매리스트 반영 (${today()})` }));
+    list.slice(1).forEach(b => removeRec('budget', b.id));
+  } else list.forEach(b => removeRec('budget', b.id));
+  render(); openCatBudget(cat); toast(on ? '구매리스트 금액을 반영했어요' : '구매리스트 반영을 해제했어요');
+}
+function deleteCatBudget(cat) {
+  const { manual, list } = catBudgetRows(cat);
+  if (!confirm(`${cat} 예산을 모두 삭제할까요?${list.length ? '\n(구매리스트 반영분 포함)' : ''}`)) return;
+  [...manual, ...list].forEach(b => removeRec('budget', b.id));
+  closeSheet(); render(); toast('삭제했어요');
 }
 
 function openGroupBudget(g) {
@@ -2183,6 +2245,7 @@ function formFields(col, rec) {
   return h;
 }
 function openForm(col, id, preset) {
+  if (col === 'budget') { const b = id && byId('budget', id); return openCatBudget(b ? (b.category || '기타') : (preset && preset.category) || null); }
   const exist = id ? byId(col, id) : null;
   const rec = exist ? Object.assign({}, exist) : Object.assign({}, preset || {});
   if (col === 'project' && !exist) rec.id = 'main';
