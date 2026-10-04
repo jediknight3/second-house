@@ -225,7 +225,8 @@ a { color: var(--primary); }
   display: block; -webkit-appearance: none; appearance: none; color: var(--text);
   width: 100%; border: 1px solid var(--border); background: var(--card); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px;
 }
-.filters { display: flex; gap: 8px; margin-bottom: 10px; }
+.filters { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+.filters select { flex: 1 1 40%; }
 .filters select { flex: 1; min-width: 0; border: 1px solid var(--border); background-color: var(--card); color: var(--text); border-radius: 10px; padding: 9px 10px; font-size: 14px; }
 
 /* ── 사진 그리드 ── */
@@ -411,7 +412,7 @@ table.tb tr.click { cursor: pointer; }
 
 <script>
 'use strict';
-const APP_VER = '1.5.2';
+const APP_VER = '1.6.0';
 
 /* ═══════════════════ 상수 ═══════════════════ */
 const COLS = ['project','phase','budget','expense','vendor','meeting','todo','file','item','loan'];
@@ -613,7 +614,7 @@ const IDB = {
 let DB = {}; COLS.forEach(c => DB[c] = []);
 let PENDING = [];
 let CFG = { gas: '', lastSync: '' };
-const S = { iGroupBy: 'group', iStatus: 'open', iQ: '', page: 'home', cost: 'list', meet: 'meeting', fCat: '', fStatus: '', fVendor: '', q: '', pKind: '', pPhase: '', todoAll: false, vQ: '' };
+const S = { fScope: '', iGroupBy: 'group', iStatus: 'open', iQ: '', page: 'home', cost: 'list', meet: 'meeting', fCat: '', fStatus: '', fVendor: '', q: '', pKind: '', pPhase: '', todoAll: false, vQ: '' };
 let SYNCING = false, flushTimer = null;
 
 async function persist() {
@@ -795,19 +796,20 @@ function vHome() {
   // 비용 KPI
   const used = pct(t.paid, t.budget), plan = Math.min(100 - used, pct(t.planned, t.budget));
   const bld = floorPy();
-  const buildCost = DB.expense.filter(e => e.category !== '토지').reduce((s, e) => s + num(e.amount), 0);
+  const buildCost = scopeTotals().build.forecast;
   h += `<div class="card" onclick="go('cost')" style="cursor:pointer">
     <div class="card-h"><div class="card-t">💰 비용 현황</div><span class="card-s">${t.budget ? '예산 ' + fmtW(t.budget) : '예산 미설정'}</span></div>
     <div class="grid g2 g4">
       <div class="kpi"><div class="l">지급완료</div><div class="v">${fmtW(t.paid)}</div><div class="s">${t.budget ? used.toFixed(1) + '% 집행' : ''}</div></div>
       <div class="kpi"><div class="l">지급예정</div><div class="v" style="color:var(--accent)">${fmtW(t.planned)}</div></div>
       <div class="kpi"><div class="l">예산 잔여</div><div class="v ${t.remain < 0 ? 'red' : ''}">${t.budget ? fmtW(t.remain) : '-'}</div></div>
-      <div class="kpi"><div class="l">평당 건축비</div><div class="v">${bld ? fmtW(buildCost / bld) : '-'}</div><div class="s">${bld ? '토지 제외 · 연면적 ' + bld.toFixed(1) + '평' : '연면적 입력 시 계산'}</div></div>
+      <div class="kpi"><div class="l">예상 총비용</div><div class="v ${t.budget && t.forecast > t.budget ? 'red' : ''}">${fmtW(t.forecast)}</div><div class="s">${t.budget ? '예산의 ' + (t.forecast / t.budget * 100).toFixed(0) + '%' : '지급 + 예정 + 구매리스트'}</div></div>
     </div>
     ${t.budget ? `<div class="bar lg mt"><i style="width:${used}%;background:var(--primary)"></i><i style="width:${plan}%;background:var(--accent);opacity:.6"></i><i style="width:${Math.min(100 - used - plan, pct(t.listRemain, t.budget))}%;background:var(--blue);opacity:.45"></i></div>` : ''}
     ${fundHomeLine()}
     ${t.listRemain ? `<div class="between mt" style="font-size:13px"><span class="muted">🛒 구매리스트 남은 예상 <b style="color:var(--blue)">${fmtW(t.listRemain)}</b></span><span>예상 총비용 <b class="${t.budget && t.forecast > t.budget ? 'red' : ''}">${fmtW(t.forecast)}</b>${t.budget ? ` <span class="faint">(예산의 ${(t.forecast / t.budget * 100).toFixed(0)}%)</span>` : ''}</span></div>` : ''}
   </div>`;
+  h += scopeCard(true);
 
   h += `<div class="grid md2">`;
   // 다가오는 일정
@@ -893,6 +895,7 @@ function vCost() {
 
   h += `<input class="search" placeholder="🔍 내용·메모·업체 검색" value="${esc(S.q)}" oninput="S.q=this.value;renderCostList()">
     <div class="filters">
+      <select onchange="S.fScope=this.value;renderCostList()"><option value="">전체 구분</option>${SCOPES.map(([k, l]) => `<option value="${k}" ${S.fScope === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
       <select onchange="S.fCat=this.value;renderCostList()"><option value="">전체 분류</option>${cats().map(c => `<option ${S.fCat === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>
       <select onchange="S.fStatus=this.value;renderCostList()"><option value="">전체 상태</option>${EXP_STATUS.map(c => `<option ${S.fStatus === c ? 'selected' : ''}>${c}</option>`).join('')}</select>
       <select onchange="S.fVendor=this.value;renderCostList()"><option value="">전체 업체</option>${refOpts('vendor').map(([id, n]) => `<option value="${id}" ${S.fVendor === id ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>
@@ -904,7 +907,7 @@ function renderCostList() { const el = document.getElementById('costList'); if (
 function costListHtml() {
   const q = S.q.trim().toLowerCase();
   const rows = DB.expense.filter(e =>
-    (!S.fCat || e.category === S.fCat) && (!S.fStatus || e.status === S.fStatus) && (!S.fVendor || e.vendorId === S.fVendor) &&
+    (!S.fScope || expenseScope(e) === S.fScope) && (!S.fCat || e.category === S.fCat) && (!S.fStatus || e.status === S.fStatus) && (!S.fVendor || e.vendorId === S.fVendor) &&
     (!q || [e.title, e.memo, e.category, refName('vendor', e.vendorId)].join(' ').toLowerCase().includes(q))
   ).sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.created || '').localeCompare(a.created || ''));
   if (!rows.length) return `<div class="card"><div class="empty"><div class="e">🧾</div>${DB.expense.length ? '조건에 맞는 지출이 없어요' : '아직 지출 기록이 없어요<br>계약금, 설계비, 자재비 등 모든 지출을 기록하세요'}<br><button class="btn p sm mt" onclick="openForm('expense')">＋ 지출 기록</button></div></div>`;
@@ -938,10 +941,11 @@ function vBudget() {
     h += `<div class="card box" style="background:var(--yellow-l);color:var(--text);font-size:13px">총 예산 ${fmtW(proj().totalBudget)} · 분류별 예산 합계 ${fmtW(t.catBudget)} → 미배정 <b>${fmtW(num(proj().totalBudget) - t.catBudget)}</b></div>`;
   }
   if (t.listRemain) h += `<div class="card"><div class="between"><div><div class="card-t">예상 총비용</div><div class="card-s">지급완료 ${fmtW(t.paid)} + 지급예정 ${fmtW(t.planned)} + 구매리스트 남은 예상 ${fmtW(t.listRemain)}</div></div><div class="right"><div style="font-size:22px;font-weight:800;white-space:nowrap" class="${t.budget && t.forecast > t.budget ? 'red' : ''}">${fmtW(t.forecast)}</div>${t.budget ? `<div class="card-s">예산 대비 ${t.forecast > t.budget ? '초과 ' + fmtW(t.forecast - t.budget) : '여유 ' + fmtW(t.budget - t.forecast)}</div>` : ''}</div></div></div>`;
+  h += scopeCard(false);
   h += listBudgetBanner();
   h += `<div class="card"><div class="card-h"><div class="card-t">분류별 예산 대비 집행</div><div class="row" style="gap:6px">${DB.item.length ? `<button class="btn sm" onclick="openApplyBudget()">🛒 리스트 반영</button>` : ''}<button class="btn sm p" onclick="openCatBudget()">＋ 예산</button></div></div>`;
   if (!rows.length) return h + `<div class="empty"><div class="e">📊</div>분류별 예산을 입력하면<br>집행률을 한눈에 볼 수 있어요</div></div>`;
-  h += rows.map(r => {
+  const rowHtml = r => {
     const base = Math.max(r.budget, r.paid + r.planned + r.list) || 1;
     const over = r.budget && r.paid + r.planned > r.budget;
     const overF = r.budget && !over && r.paid + r.planned + r.list > r.budget;
@@ -951,6 +955,12 @@ function vBudget() {
       <div class="bar mt" style="margin-top:8px"><i style="width:${r.paid / base * 100}%;background:${over ? 'var(--red)' : 'var(--primary)'}"></i><i style="width:${r.planned / base * 100}%;background:var(--accent);opacity:.55"></i><i style="width:${r.list / base * 100}%;background:var(--blue);opacity:.4"></i></div>
       <div class="between faint" style="font-size:12px;margin-top:4px"><span>지급 ${fmtW(r.paid)}${r.planned ? ' · 예정 ' + fmtW(r.planned) : ''}${r.list ? ` · <span style="color:var(--blue)">🛒 ${fmtW(r.list)}</span>` : ''}</span><span class="${r.budget - r.paid - r.planned < 0 ? 'red' : ''}">${r.budget ? '잔여 ' + fmtW(r.budget - r.paid - r.planned) : ''}</span></div>
     </div>`;
+  };
+  h += SCOPES.map(([k, l]) => {
+    const rs = rows.filter(r => catScope(r.cat) === k);
+    if (!rs.length) return '';
+    const used = rs.reduce((s, r) => s + r.paid + r.planned, 0), bud = rs.reduce((s, r) => s + r.budget, 0);
+    return `<div class="grp-h" style="margin-top:14px"><span>${l}</span><span class="num">${fmtW(used)} / ${fmtW(bud)}</span></div>` + rs.map(rowHtml).join('');
   }).join('');
   h += `<div class="between mt" style="font-size:14px"><b>합계</b><span class="num"><b>${fmtW(t.total)}</b> / ${fmtW(t.catBudget)}</span></div>`;
   return h + `</div>`;
@@ -1435,6 +1445,67 @@ function applyHeatPlan() {
   });
   closeSheet(); S.cost = 'items'; S.iStatus = 'all'; go('cost');
   toast(`난방 설치비 ${n}개를 구매리스트에 넣었어요 · 연료비 연 ${fmtW(r.yearCost)} 예상`);
+}
+
+// ── 토지 / 순수 건축비 / 건축 외 구분
+const SCOPES = [['land', '🌳 토지', '#7A8B2E'], ['build', '🏗️ 건축비', '#2F6B4F'], ['other', '🛋️ 건축 외', '#C9772B']];
+const SCOPE_NAME = Object.fromEntries(SCOPES.map(x => [x[0], x[1]]));
+const CAT_SCOPE_DEF = { '토지': 'land', '가구·가전': 'other', '조경·외부': 'other', '금융비용': 'other', '기타': 'other' };
+const GROUP_SCOPE_DEF = { '설비·난방': 'build' };
+const catScope = c => jsonField('catScope', CAT_SCOPE_DEF)[c || '기타'] || 'build';
+const groupScope = g => jsonField('groupScope', GROUP_SCOPE_DEF)[g || '기타'] || 'other';
+// 구매리스트에서 자동 기록된 지출은 구매리스트 구분 기준으로
+function expenseScope(e) { const it = e.itemId && byId('item', e.itemId); return it ? groupScope(it.group) : catScope(e.category); }
+function scopeTotals() {
+  const z = () => ({ budget: 0, paid: 0, planned: 0, list: 0 });
+  const o = { land: z(), build: z(), other: z() };
+  DB.expense.forEach(e => { const k = expenseScope(e); e.status === '지급예정' ? o[k].planned += num(e.amount) : o[k].paid += num(e.amount); });
+  DB.item.forEach(it => { if (!['구매완료', '보류'].includes(it.status) && !it.expenseId) o[groupScope(it.group)].list += itemEst(it); });
+  // 예산: 직접 입력분은 분류 기준, 구매리스트 반영분은 그 분류에 들어간 구매항목 비율대로 나눔
+  const est = {}; DB.item.forEach(it => { if (it.status === '보류') return; const c = catOfGroup(it.group), k = groupScope(it.group); est[c] = est[c] || {}; est[c][k] = (est[c][k] || 0) + itemCost(it); });
+  costBudgets().forEach(b => {
+    const c = b.category || '기타', a = num(b.amount), e = est[c];
+    const tot = e ? Object.values(e).reduce((s, v) => s + v, 0) : 0;
+    if (b.fromList && tot) Object.entries(e).forEach(([k, v]) => o[k].budget += a * v / tot); else o[catScope(c)].budget += a;
+  });
+  Object.values(o).forEach(x => x.forecast = x.paid + x.planned + x.list);
+  return o;
+}
+function scopeCard(compact) {
+  const o = scopeTotals();
+  const total = SCOPES.reduce((s, [k]) => s + o[k].forecast, 0);
+  if (!total && !SCOPES.some(([k]) => o[k].budget)) return '';
+  const py = floorPy();
+  return `<div class="card"${compact ? ` onclick="S.cost='budget';go('cost')" style="cursor:pointer"` : ''}>
+    <div class="card-h"><div class="card-t">🏗️ 건축비 vs 건축 외</div>${compact ? '<span class="card-s">예상 기준</span>' : `<button class="btn sm" onclick="openScopeSettings()">⚙ 구분 기준</button>`}</div>
+    <div class="bar lg">${SCOPES.map(([k, , c]) => `<i style="width:${total ? o[k].forecast / total * 100 : 0}%;background:${c}"></i>`).join('')}</div>
+    <div class="grid ${compact ? 'g2 g4' : 'md3'} mt">${SCOPES.map(([k, l, c]) => { const x = o[k];
+      return `<div ${compact ? 'class="kpi"' : `class="box" style="cursor:pointer" onclick="S.fScope='${k}';S.cost='list';go('cost')"`}>
+        <div class="l" style="font-size:13px;font-weight:700;color:var(--sub)"><span class="sw" style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${c}"></span> ${l}</div>
+        <div class="v" style="font-size:20px;font-weight:800;margin-top:4px">${fmtW(x.forecast)}</div>
+        <div class="s faint" style="font-size:12px;margin-top:2px">${x.budget ? `예산 ${fmtW(x.budget)} · <span class="${x.forecast > x.budget ? 'red' : ''}">${x.forecast > x.budget ? '초과 ' + fmtW(x.forecast - x.budget) : '여유 ' + fmtW(x.budget - x.forecast)}</span>` : '예산 미설정'}</div>
+        ${compact ? '' : `<div class="faint" style="font-size:11.5px;margin-top:4px">지급 ${fmtW(x.paid)}${x.planned ? ' · 예정 ' + fmtW(x.planned) : ''}${x.list ? ' · 🛒 ' + fmtW(x.list) : ''}</div>`}
+      </div>`; }).join('')}
+      ${compact ? `<div class="kpi"><div class="l" style="font-size:13px;font-weight:700;color:var(--sub)">평당 순수 건축비</div><div class="v" style="font-size:20px;font-weight:800;margin-top:4px">${py ? fmtW(o.build.forecast / py) : '-'}</div><div class="s faint" style="font-size:12px;margin-top:2px">${py ? '연면적 ' + py.toFixed(1) + '평' : '연면적 입력 시 계산'}</div></div>` : ''}
+    </div>
+    ${!compact && py ? `<div class="between mt" style="font-size:14px;padding-top:10px;border-top:1px solid var(--border)"><span>평당 순수 건축비 <span class="faint" style="font-size:12px">(건축비 ÷ 연면적 ${py.toFixed(1)}평)</span></span><b>${fmtW(o.build.forecast / py)}</b></div>` : ''}
+  </div>`;
+}
+function openScopeSettings() {
+  const cs = cats(), gs = itemGroups();
+  const sel = (cls, key, cur) => `<select class="cell ${cls}" data-k="${esc(key)}" style="width:auto;text-align:left">${SCOPES.map(([k, l]) => `<option value="${k}" ${cur === k ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
+  openSheet(`<div class="sheet-h"><h3>⚙ 구분 기준</h3></div>
+    <div class="card-s" style="margin-bottom:10px;line-height:1.6">지출·예산은 <b>분류</b>로, 구매리스트는 <b>구분</b>으로 토지/건축비/건축 외를 나눠요.</div>
+    <div class="sec-t" style="margin-top:0">지출·예산 분류</div>
+    ${cs.map(c => `<div class="between" style="padding:6px 0;border-bottom:1px solid var(--border)"><span style="font-size:14px">${catIcon(c)} ${esc(c)}</span>${sel('sc-cat', c, catScope(c))}</div>`).join('')}
+    <div class="sec-t">구매리스트 구분</div>
+    ${gs.map(g => `<div class="between" style="padding:6px 0;border-bottom:1px solid var(--border)"><span style="font-size:14px">${GROUP_ICON[g] || '📦'} ${esc(g)}</span>${sel('sc-grp', g, groupScope(g))}</div>`).join('')}
+    <div class="sheet-btns"><button class="btn" onclick="closeSheet()">취소</button><button class="btn p" onclick="saveScopeSettings()">저장</button></div>`);
+}
+function saveScopeSettings() {
+  const pick = (cls, def, fallback) => Object.fromEntries([...document.querySelectorAll('.' + cls)].map(x => [x.dataset.k, x.value]).filter(([k, v]) => (def[k] || fallback) !== v));
+  upsert('project', Object.assign({}, proj(), { id: 'main', catScope: JSON.stringify(pick('sc-cat', CAT_SCOPE_DEF, 'build')), groupScope: JSON.stringify(pick('sc-grp', GROUP_SCOPE_DEF, 'other')) }));
+  closeSheet(); render(); toast('구분 기준을 저장했어요');
 }
 
 // ── 분류별 예산: 한 분류 = 한 화면 (직접 입력분 + 구매리스트 반영분)
