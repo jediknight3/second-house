@@ -10,169 +10,203 @@
   const f1 = (v, d = 1) => (Math.round(v * 10 ** d) / 10 ** d).toFixed(d);
 
   // ── 층별 계획 (x: 서→동, y: 북→남, 단위 m) ──
+  // door: [x1,y1,x2,y2, nx,ny] → 힌지 (x1,y1), 닫힌 끝 (x2,y2), 열리는 방향 (nx,ny)
+  // open: [x1,y1,x2,y2] → 벽 없이 트인 구간
   const PLAN = {
     f1: {
-      title: '1층 평면도', sub: '프라이빗 엔터테인먼트 · 게스트', W: 9.6, D: 6.2,
+      title: '1층 평면도', W: 9.6, D: 6.2,
       rooms: [
-        R('파티룸', 0, 0, 4.3, 6.2, { c: '#EDE3D1' }),
-        R('계단', 4.3, 0, 2.1, 2.8, { c: '#E3DDD2', stair: 1, noArea: 0 }),
-        R('현관', 6.4, 0, 3.2, 2.0, { c: '#E6E1D9' }),
-        R('욕실', 7.6, 2.0, 2.0, 1.8, { c: '#DEE5E8' }),
-        R('세탁실', 4.3, 4.4, 1.3, 1.8, { c: '#DEE5E8' }),
-        R('침실', 5.6, 3.8, 4.0, 2.4, { c: '#E9DFCB' }),
-        { n: '복도', pts: [[4.3, 2.8], [6.4, 2.8], [6.4, 2.0], [7.6, 2.0], [7.6, 3.8], [5.6, 3.8], [5.6, 4.4], [4.3, 4.4]], c: '#EEEAE3', small: 1 },
+        R('파티룸', 0, 0, 4.3, 6.2, { c: '#EFE5D3' }),
+        R('계단', 4.3, 0, 2.1, 2.8, { c: '#E8E2D8', stair: 'up' }),
+        R('현관', 6.4, 0, 2.2, 2.8, { c: '#E4DFD6', tile: 1 }),
+        R('세탁실', 8.6, 0, 1.0, 2.8, { c: '#E1E7EA', tile: 1 }),
+        R('복도', 4.3, 2.8, 5.3, 1.0, { c: '#EEE9E1', small: 1 }),
+        R('침실', 4.3, 3.8, 3.6, 2.4, { c: '#EBE1CE' }),
+        R('욕실', 7.9, 3.8, 1.7, 2.4, { c: '#E1E7EA', tile: 1 }),
       ],
-      win: [ // [x1,y1,x2,y2, 'w'(창)|'d'(현관문)|'s'(슬라이딩)]
-        [0.3, 6.2, 4.0, 6.2, 's'], [0, 1.2, 0, 4.8, 'w'], [6.2, 6.2, 9.2, 6.2, 'w'], [9.6, 4.2, 9.6, 5.8, 'w'],
-        [9.6, 2.4, 9.6, 3.4, 'w'], [7.4, 0, 8.4, 0, 'd'], [8.6, 0, 9.2, 0, 'w'], [4.5, 0, 6.2, 0, 'w'], [4.5, 6.2, 5.4, 6.2, 'w'],
-      ],
-      doors: [ // [힌지x, 힌지y, 폭, 방향(deg 시작), 스윕]
-        [4.3, 2.95, 1.25, 90, -90], [7.6, 2.25, 0.8, 180, -90], [6.05, 3.8, 0.8, 0, 90], [4.45, 4.4, 0.8, 0, 90],
-      ],
-      furn: [
-        { t: 'rect', x: 0.25, y: 0.2, w: 3.8, h: 0.55, c: '#6B4F3A', l: '와인셀러·바' },
-        { t: 'rect', x: 0.9, y: 1.45, w: 2.4, h: 0.75, c: '#B8AEA0', l: '바 아일랜드' },
-        { t: 'sofa', x: 0.35, y: 3.75, w: 2.9, h: 0.85, ret: 1.1 },
-        { t: 'rect', x: 1.4, y: 4.85, w: 1.2, h: 0.6, c: '#CFC4B2', r: 0.3 },
-        { t: 'rect', x: 4.0, y: 3.4, w: 0.2, h: 2.4, c: '#3A3F48', l: '' },
-        { t: 'bed', x: 7.4, y: 4.0, w: 1.6, h: 2.0 },
-        { t: 'rect', x: 5.7, y: 3.95, w: 0.6, h: 2.1, c: '#CFC4B2', l: '' },
-        { t: 'wc', x: 9.05, y: 2.15 }, { t: 'rect', x: 7.75, y: 3.2, w: 1.1, h: 0.5, c: '#C9D3D8', l: '' },
-        { t: 'rect', x: 8.95, y: 2.95, w: 0.55, h: 0.75, c: '#C9D3D8', l: '' },
-        { t: 'rect', x: 4.4, y: 5.4, w: 0.55, h: 0.6, c: '#C9D3D8', l: '' }, { t: 'rect', x: 4.98, y: 5.4, w: 0.55, h: 0.6, c: '#C9D3D8', l: '' },
-        { t: 'rect', x: 6.6, y: 0.15, w: 1.2, h: 0.45, c: '#CFC4B2', l: '' },
-      ],
-      label: { '파티룸': [2.15, 2.9], '침실': [6.5, 5.6], '복도': [6.9, 3.3], '계단': [5.35, 1.4] },
-      upArrow: [[4.8, 2.6], [4.8, 0.6], [5.9, 0.6], [5.9, 2.5]],
-    },
-    f2: {
-      title: '2층 평면도', sub: '대면형 LDK · 파노라마 조망', W: 9.6, D: 6.2, bodyW: 8.0,
-      rooms: [
-        { n: 'LDK', pts: [[1.6, 0], [4.3, 0], [4.3, 2.8], [8.0, 2.8], [8.0, 6.2], [0, 6.2], [0, 2.2], [1.6, 2.2]], c: '#EFE7D8' },
-        R('계단', 4.3, 0, 2.1, 2.8, { c: '#E3DDD2', stair: 1 }),
-        R('욕실', 6.4, 0, 1.6, 2.8, { c: '#DEE5E8' }),
-        R('다용도실', 0, 0, 1.6, 2.2, { c: '#DEE5E8' }),
-        R('테라스', 8.0, 0, 1.6, 6.2, { c: '#D9CBB4', terrace: 1 }),
+      open: [[4.3, 2.8, 5.3, 2.8], [6.6, 2.8, 8.4, 2.8]],
+      doors: [
+        [4.3, 2.85, 4.3, 3.75, -1, 0],       // 복도 → 파티룸
+        [8.7, 2.8, 9.5, 2.8, 0, -1],         // 복도 → 세탁실
+        [6.4, 3.8, 7.2, 3.8, 0, 1],          // 복도 → 침실
+        [8.0, 3.8, 8.75, 3.8, 0, 1],         // 복도 → 욕실
+        [7.8, 0, 6.8, 0, 0, 1, 'ext'],       // 현관문
       ],
       win: [
-        [0.4, 6.2, 3.6, 6.2, 'w'], [4.6, 6.2, 7.6, 6.2, 'w'], [0, 3.4, 0, 5.8, 'w'], [0, 0.6, 0, 1.6, 'w'],
-        [2.0, 0, 4.0, 0, 'w'], [6.8, 0, 7.6, 0, 'w'], [8.0, 3.4, 8.0, 5.6, 's'], [4.5, 0, 6.2, 0, 'w'],
+        [0.3, 6.2, 4.0, 6.2, 's'], [0, 1.0, 0, 5.0, 'w'], [4.55, 0, 6.15, 0, 'w'], [7.95, 0, 8.3, 0, 'w'],
+        [9.6, 0.7, 9.6, 2.1, 'w'], [4.8, 6.2, 7.4, 6.2, 'w'], [8.3, 6.2, 9.3, 6.2, 'w'], [9.6, 4.3, 9.6, 5.5, 'w'],
       ],
-      doors: [[1.6, 0.6, 0.8, 90, 90], [6.4, 2.0, 0.75, 90, 90]],
       furn: [
-        { t: 'rect', x: 1.7, y: 0.1, w: 2.5, h: 0.6, c: '#BCB2A3', l: '주방' },
-        { t: 'rect', x: 1.7, y: 2.55, w: 2.4, h: 0.8, c: '#9C9285', l: '아일랜드 (대면형)' },
-        { t: 'stool', xs: [2.0, 2.6, 3.2, 3.8], y: 3.55 },
-        { t: 'sofa', x: 0.3, y: 4.9, w: 3.0, h: 0.85, ret: 0 },
-        { t: 'rect', x: 1.2, y: 4.2, w: 1.2, h: 0.55, c: '#CFC4B2', r: 0.25 },
-        { t: 'table', x: 5.1, y: 3.7, w: 1.8, h: 0.9 },
-        { t: 'wc', x: 7.45, y: 0.15 }, { t: 'rect', x: 6.5, y: 0.1, w: 0.75, h: 1.0, c: '#C9D3D8', l: '' },
-        { t: 'rect', x: 6.5, y: 1.6, w: 1.4, h: 1.1, c: '#C9D3D8', l: '샤워' },
-        { t: 'rect', x: 0.1, y: 0.1, w: 0.6, h: 0.6, c: '#C9D3D8', l: '' },
-        { t: 'deckchair', x: 8.4, y: 4.3 }, { t: 'deckchair', x: 8.4, y: 1.4 },
+        { t: 'rect', x: 0.2, y: 0.15, w: 3.9, h: 0.6, c: '#6B4F3A', l: '와인셀러 · 바 카운터' },
+        { t: 'rect', x: 0.9, y: 1.55, w: 2.4, h: 0.8, c: '#B9AFA1', l: '바 아일랜드', r: 0.08 },
+        { t: 'stool', xs: [1.2, 1.8, 2.4, 3.0], y: 2.6 },
+        { t: 'sofaV', x: 0.2, y: 3.35, w: 0.9, h: 2.4 },
+        { t: 'rect', x: 1.55, y: 3.95, w: 0.75, h: 1.25, c: '#CFC4B2', r: 0.12 },
+        { t: 'rect', x: 4.08, y: 4.0, w: 0.14, h: 2.0, c: '#30353D', l: '' },
+        { t: 'txt', x: 3.82, y: 5.0, l: '스크린', rot: 90 },
+        { t: 'rect', x: 8.1, y: 0.75, w: 0.42, h: 1.95, c: '#CFC4B2', l: '' }, { t: 'txt', x: 8.31, y: 1.75, l: '신발장', rot: 90 },
+        { t: 'washer', x: 8.75, y: 0.15 }, { t: 'washer', x: 8.75, y: 0.92 },
+        { t: 'bedH', x: 4.4, y: 4.25, w: 2.0, h: 1.6 },
+        { t: 'rect', x: 4.4, y: 3.92, w: 0.45, h: 0.3, c: '#CFC4B2', l: '' }, { t: 'rect', x: 4.4, y: 5.88, w: 0.45, h: 0.28, c: '#CFC4B2', l: '' },
+        { t: 'closet', x: 7.28, y: 3.9, w: 0.55, h: 2.2 },
+        { t: 'shower', x: 7.98, y: 5.3, w: 1.55, h: 0.82 }, { t: 'wc', x: 9.12, y: 3.92 }, { t: 'vanity', x: 7.98, y: 4.65, w: 0.45, h: 0.6 },
       ],
-      label: { 'LDK': [6.0, 5.45], '테라스': [8.8, 3.2], '계단': [5.35, 1.4] },
-      upArrow: [[4.8, 2.6], [4.8, 0.6], [5.9, 0.6], [5.9, 2.5]],
+      label: { '파티룸': [2.3, 3.2], '침실': [5.4, 5.25], '복도': [7.0, 3.32], '현관': [7.25, 1.55], '세탁실': [9.1, 1.9], '욕실': [8.85, 4.8] },
+    },
+    f2: {
+      title: '2층 평면도', W: 9.6, D: 6.2, bodyW: 8.0,
+      rooms: [
+        { n: 'LDK', pts: [[1.6, 0], [4.3, 0], [4.3, 2.8], [6.4, 2.8], [8.0, 2.8], [8.0, 6.2], [0, 6.2], [0, 2.2], [1.6, 2.2]], c: '#F0E8DA' },
+        R('계단', 4.3, 0, 2.1, 2.8, { c: '#E8E2D8', stair: 'updn' }),
+        R('욕실', 6.4, 0, 1.6, 2.8, { c: '#E1E7EA', tile: 1 }),
+        R('다용도실', 0, 0, 1.6, 2.2, { c: '#E1E7EA', tile: 1 }),
+        R('테라스', 8.0, 0, 1.6, 6.2, { c: '#DCCDB5', terrace: 1 }),
+      ],
+      open: [[4.3, 2.8, 6.4, 2.8]],
+      doors: [
+        [1.6, 1.55, 1.6, 0.75, 1, 0],        // 주방 → 다용도실
+        [6.5, 2.8, 7.25, 2.8, 0, -1],        // LDK → 욕실
+      ],
+      win: [
+        [0.4, 6.2, 3.8, 6.2, 'w'], [4.6, 6.2, 7.6, 6.2, 'w'], [0, 3.2, 0, 5.8, 'w'], [0, 0.6, 0, 1.6, 'w'],
+        [2.0, 0, 4.0, 0, 'w'], [4.55, 0, 6.15, 0, 'w'], [6.8, 0, 7.6, 0, 'w'], [8.0, 3.4, 8.0, 5.6, 's'],
+      ],
+      furn: [
+        { t: 'counter', x: 1.65, y: 0.08, w: 2.6, h: 0.62 },
+        { t: 'rect', x: 1.75, y: 2.3, w: 2.4, h: 0.85, c: '#A69C8F', l: '아일랜드 (대면형)', r: 0.06 },
+        { t: 'stool', xs: [2.1, 2.7, 3.3, 3.9], y: 3.4 },
+        { t: 'sofaS', x: 0.4, y: 3.85, w: 2.9, h: 0.9 },
+        { t: 'rect', x: 1.2, y: 5.0, w: 1.3, h: 0.6, c: '#CFC4B2', r: 0.28 },
+        { t: 'chair', x: 3.45, y: 4.95 },
+        { t: 'table', x: 5.0, y: 3.85, w: 1.8, h: 0.9 },
+        { t: 'rect', x: 0.08, y: 0.1, w: 0.7, h: 0.7, c: '#CDD7DC', l: '' }, { t: 'txt', x: 0.43, y: 0.52, l: '보일러' },
+        { t: 'wc', x: 7.45, y: 0.12 }, { t: 'vanity', x: 6.48, y: 0.12, w: 0.5, h: 0.8 }, { t: 'shower', x: 6.48, y: 1.0, w: 1.45, h: 0.9 },
+        { t: 'deckchair', x: 8.4, y: 4.2 }, { t: 'deckchair', x: 8.4, y: 1.3 },
+      ],
+      label: { 'LDK': [6.0, 5.5], '테라스': [8.8, 3.3], '욕실': [7.62, 2.2], '다용도실': [0.8, 1.45] },
     },
     f3: {
-      title: '다락 평면도', sub: '천창 아래 감성 침실', W: 9.6, D: 6.2, bodyW: 8.0,
+      title: '다락 평면도', W: 9.6, D: 6.2, bodyW: 8.0,
       rooms: [
-        { n: '다락 침실', pts: [[0, 0], [4.3, 0], [4.3, 2.8], [6.4, 2.8], [6.4, 0], [8.0, 0], [8.0, 6.2], [0, 6.2]], c: '#EEE6D6', areaText: '유효 약 30.1㎡ · 9.1평 (높이 1.5m 이상)' },
-        R('계단', 4.3, 0, 2.1, 2.8, { c: '#E3DDD2', stair: 1 }),
+        { n: '다락 침실', pts: [[0, 0], [4.3, 0], [4.3, 2.8], [6.4, 2.8], [6.4, 0], [8.0, 0], [8.0, 6.2], [0, 6.2]], c: '#EFE7D7', areaText: '유효 약 30.1㎡ · 9.1평 (높이 1.5m 이상)' },
+        R('계단', 4.3, 0, 2.1, 2.8, { c: '#E8E2D8', stair: 'dn' }),
       ],
-      win: [[0, 2.4, 0, 3.8, 'w'], [8.0, 2.4, 8.0, 3.8, 'w']],
+      open: [[5.4, 2.8, 6.4, 2.8]],
       doors: [],
+      win: [[0, 2.4, 0, 3.8, 'w'], [8.0, 2.4, 8.0, 3.8, 'w']],
       furn: [
-        { t: 'bed', x: 1.3, y: 2.2, w: 1.6, h: 2.0, rot: 1 },
-        { t: 'rect', x: 6.7, y: 3.4, w: 1.0, h: 1.6, c: '#CFC4B2', l: '라운지', r: 0.2 },
-        { t: 'sky', x: 1.5, y: 4.3, w: 1.0, h: 0.9 }, { t: 'sky', x: 4.9, y: 4.3, w: 1.0, h: 0.9 },
+        { t: 'bedV', x: 1.0, y: 1.25, w: 1.6, h: 2.0 },
+        { t: 'rect', x: 0.45, y: 1.3, w: 0.45, h: 0.4, c: '#CFC4B2', l: '' }, { t: 'rect', x: 2.7, y: 1.3, w: 0.45, h: 0.4, c: '#CFC4B2', l: '' },
+        { t: 'rect', x: 6.6, y: 3.5, w: 1.0, h: 1.5, c: '#CFC4B2', l: '라운지', r: 0.2 },
+        { t: 'sky', x: 1.3, y: 3.85, w: 1.0, h: 0.9 }, { t: 'sky', x: 4.9, y: 3.85, w: 1.0, h: 0.9 },
       ],
-      label: { '다락 침실': [2.3, 1.2], '계단': [5.35, 1.4] },
-      hatch: [[0, 0, 8.0, 1.1], [0, 5.1, 8.0, 1.1]],
-      upArrow: null,
+      label: { '다락 침실': [2.9, 4.95] },
+      hatch: [[0, 0, 4.3, 1.2], [6.4, 0, 1.6, 1.2], [0, 5.0, 8.0, 1.2]],
     },
   };
 
   // ── 평면도 SVG ──
   function planSVG(key) {
-    const P = PLAN[key], S = 54, pad = 46, W = P.W, D = P.D;
+    const P = PLAN[key], S = 56, pad = 48, W = P.W, D = P.D, bw = P.bodyW || W;
     const vw = W * S + pad * 2, vh = D * S + pad * 2 + 30;
     const X = x => pad + x * S, Y = y => pad + y * S;
     const poly = pts => pts.map(p => X(p[0]).toFixed(1) + ',' + Y(p[1]).toFixed(1)).join(' ');
+    const L = (x1, y1, x2, y2, st, w, ex) => `<line x1="${X(x1).toFixed(1)}" y1="${Y(y1).toFixed(1)}" x2="${X(x2).toFixed(1)}" y2="${Y(y2).toFixed(1)}" stroke="${st}" stroke-width="${w}" ${ex || ''}/>`;
+    const T = (x, y, s, size, col, w, rot) => `<text x="${X(x).toFixed(1)}" y="${Y(y).toFixed(1)}" text-anchor="middle" font-size="${size}" ${w ? `font-weight="${w}"` : ''} fill="${col}" ${rot ? `transform="rotate(${rot} ${X(x).toFixed(1)} ${Y(y).toFixed(1)})"` : ''}>${s}</text>`;
+    const WALL = '#3A352F', FLOOR_GAP = '#EEE8DE';
     let g = '';
-    // 1층 윤곽(2층·다락에서는 점선으로)
-    if (key !== 'f1') g += `<rect x="${X(0)}" y="${Y(0)}" width="${W * S}" height="${D * S}" fill="none" stroke="#B9B1A4" stroke-dasharray="4 4" stroke-width="1"/>`;
+    if (key !== 'f1') g += `<rect x="${X(0)}" y="${Y(0)}" width="${W * S}" height="${D * S}" fill="none" stroke="#BDB5A8" stroke-dasharray="5 4" stroke-width="1"/><text x="${X(W) - 4}" y="${Y(D) + 14}" text-anchor="end" font-size="9.5" fill="#A39B8E">점선: 1층 외곽</text>`;
+    // 바닥
     P.rooms.forEach(r => {
-      g += `<polygon points="${poly(r.pts)}" fill="${r.c}" stroke="#7D766C" stroke-width="${r.terrace ? 1 : 1.4}" ${r.terrace ? 'stroke-dasharray="5 3"' : ''}/>`;
-      if (r.terrace) for (let i = 0.3; i < 6.2; i += 0.3) g += `<line x1="${X(8.0)}" y1="${Y(i)}" x2="${X(9.6)}" y2="${Y(i)}" stroke="#C7B79D" stroke-width="0.8"/>`;
+      g += `<polygon points="${poly(r.pts)}" fill="${r.c}"/>`;
+      if (r.tile) g += `<polygon points="${poly(r.pts)}" fill="url(#tile)" opacity=".55"/>`;
+      if (r.terrace) for (let i = 0.25; i < 6.2; i += 0.25) g += L(8.0, i, 9.6, i, '#CBBA9F', 0.8);
     });
-    // 계단 디딤판
-    P.rooms.filter(r => r.stair).forEach(r => {
-      const [x0, y0] = r.pts[0];
-      for (let k = 0; k < 8; k++) { const yy = y0 + 1.0 + k * 0.225; g += `<line x1="${X(x0)}" y1="${Y(yy)}" x2="${X(x0 + 1.0)}" y2="${Y(yy)}" stroke="#A39B8E" stroke-width="0.8"/><line x1="${X(x0 + 1.1)}" y1="${Y(yy)}" x2="${X(x0 + 2.1)}" y2="${Y(yy)}" stroke="#A39B8E" stroke-width="0.8"/>`; }
-      g += `<line x1="${X(x0 + 1.05)}" y1="${Y(y0 + 1.0)}" x2="${X(x0 + 1.05)}" y2="${Y(y0 + 2.8)}" stroke="#7D766C" stroke-width="1.2"/>`;
-    });
-    if (P.upArrow) g += `<polyline points="${poly(P.upArrow)}" fill="none" stroke="#8C6D45" stroke-width="1.4" marker-end="url(#arr)"/>`;
-    // 다락 낮은 천장(수납) 해치
+    // 낮은 천장 해치
     (P.hatch || []).forEach(([x, y, w, h]) => {
-      g += `<rect x="${X(x)}" y="${Y(y)}" width="${w * S}" height="${h * S}" fill="url(#hatch)" opacity=".55"/>`;
-      g += `<text x="${X(x + w / 2)}" y="${Y(y + h / 2) + 4}" text-anchor="middle" font-size="10.5" fill="#7D766C">수납 (천장 높이 1.5m 미만)</text>`;
+      g += `<rect x="${X(x)}" y="${Y(y)}" width="${w * S}" height="${h * S}" fill="url(#hatch)" opacity=".5"/>`;
     });
-    // 가구
+    if (P.hatch) { g += T(2.15, 0.68, '수납 · 천장 낮음 (h&lt;1.5m)', 10, '#7D766C'); g += T(4.0, 5.68, '수납 · 천장 낮음 (h&lt;1.5m)', 10, '#7D766C'); }
+    // 계단 (U자, 폭 1.0m × 2 + 중앙벽)
+    P.rooms.filter(r => r.stair).forEach(r => {
+      const [x0, y0] = r.pts[0], top = y0 + 1.0, bot = y0 + 2.8;
+      for (let k = 0; k <= 7; k++) { const yy = top + k * 0.257; g += L(x0, yy, x0 + 1.0, yy, '#9C9488', 0.9) + L(x0 + 1.1, yy, x0 + 2.1, yy, '#9C9488', 0.9); }
+      g += `<rect x="${X(x0 + 1.0)}" y="${Y(top)}" width="${0.1 * S}" height="${1.8 * S}" fill="${WALL}"/>`;
+      const arrow = (pts, lab, lx, ly) => `<polyline points="${poly(pts)}" fill="none" stroke="#8C6D45" stroke-width="1.5" marker-end="url(#arr)"/>` + T(lx, ly, lab, 10, '#8C6D45', 700);
+      if (r.stair === 'up') g += arrow([[x0 + 0.5, bot - 0.15], [x0 + 0.5, y0 + 0.5], [x0 + 1.6, y0 + 0.5], [x0 + 1.6, bot - 0.35]], 'UP', x0 + 0.5, bot - 0.25);
+      if (r.stair === 'updn') { g += arrow([[x0 + 0.5, bot - 0.15], [x0 + 0.5, y0 + 0.55]], 'UP', x0 + 0.5, bot - 0.25) + arrow([[x0 + 1.6, bot - 0.15], [x0 + 1.6, y0 + 0.55]], 'DN', x0 + 1.6, bot - 0.25); }
+      if (r.stair === 'dn') { g += `<rect x="${X(x0)}" y="${Y(top)}" width="${1.0 * S}" height="${1.8 * S}" fill="url(#hatch)" opacity=".35"/>` + L(x0, bot, x0 + 1.0, bot, '#5B7C93', 2.5) + arrow([[x0 + 1.6, bot - 0.15], [x0 + 1.6, y0 + 0.55]], 'DN', x0 + 1.6, bot - 0.25) + T(x0 + 0.5, top + 1.0, '오픈', 9.5, '#7D766C'); }
+    });
+    // 가구·설비
     P.furn.forEach(f => {
-      if (f.t === 'rect') g += `<rect x="${X(f.x)}" y="${Y(f.y)}" width="${f.w * S}" height="${f.h * S}" rx="${(f.r || 0.05) * S}" fill="${f.c}" opacity=".9"/>${f.l ? `<text x="${X(f.x + f.w / 2)}" y="${Y(f.y + f.h / 2) + 3.5}" text-anchor="middle" font-size="9.5" fill="${/^#[4-7]/.test(f.c) ? '#F3EBDD' : '#4A443C'}">${f.l}</text>` : ''}`;
-      else if (f.t === 'sofa') { g += `<rect x="${X(f.x)}" y="${Y(f.y)}" width="${f.w * S}" height="${f.h * S}" rx="6" fill="#9E8F7D"/><rect x="${X(f.x) + 4}" y="${Y(f.y) + 4}" width="${f.w * S - 8}" height="${f.h * S - 14}" rx="4" fill="#B5A693"/>`; if (f.ret) g += `<rect x="${X(f.x)}" y="${Y(f.y + f.h) - 2}" width="${0.85 * S}" height="${f.ret * S}" rx="6" fill="#9E8F7D"/>`; }
-      else if (f.t === 'bed') { const w = (f.rot ? f.h : f.w) * S, h = (f.rot ? f.w : f.h) * S; g += `<rect x="${X(f.x)}" y="${Y(f.y)}" width="${w}" height="${h}" rx="4" fill="#F4EFE6" stroke="#A39B8E"/>`; g += f.rot ? `<rect x="${X(f.x) + 4}" y="${Y(f.y) + 6}" width="${0.4 * S}" height="${h - 12}" rx="3" fill="#D8CFC2"/>` : `<rect x="${X(f.x) + 6}" y="${Y(f.y) + 4}" width="${w - 12}" height="${0.4 * S}" rx="3" fill="#D8CFC2"/>`; g += `<rect x="${X(f.x) + (f.rot ? 0.6 * S : 3)}" y="${Y(f.y) + (f.rot ? 3 : 0.75 * S)}" width="${f.rot ? w - 0.6 * S - 3 : w - 6}" height="${f.rot ? h - 6 : h - 0.75 * S - 3}" rx="3" fill="#C8B79E" opacity=".65"/>`; }
-      else if (f.t === 'wc') g += `<ellipse cx="${X(f.x + 0.22)}" cy="${Y(f.y + 0.38)}" rx="${0.19 * S}" ry="${0.26 * S}" fill="#F7F7F5" stroke="#9AA4A8"/><rect x="${X(f.x + 0.02)}" y="${Y(f.y)}" width="${0.4 * S}" height="${0.15 * S}" fill="#F7F7F5" stroke="#9AA4A8"/>`;
-      else if (f.t === 'stool') f.xs.forEach(x => g += `<circle cx="${X(x)}" cy="${Y(f.y)}" r="${0.17 * S}" fill="#6B5A48"/>`);
-      else if (f.t === 'table') { g += `<rect x="${X(f.x)}" y="${Y(f.y)}" width="${f.w * S}" height="${f.h * S}" rx="5" fill="#8A6A4C"/>`; [0.3, 0.9, 1.5].forEach(dx => { g += `<circle cx="${X(f.x + dx)}" cy="${Y(f.y) - 7}" r="7" fill="#B5A693"/><circle cx="${X(f.x + dx)}" cy="${Y(f.y + f.h) + 7}" r="7" fill="#B5A693"/>`; }); }
-      else if (f.t === 'deckchair') g += `<rect x="${X(f.x)}" y="${Y(f.y)}" width="${0.8 * S}" height="${1.4 * S}" rx="6" fill="#F4EFE6" stroke="#A39B8E"/>`;
-      else if (f.t === 'sky') g += `<rect x="${X(f.x)}" y="${Y(f.y)}" width="${f.w * S}" height="${f.h * S}" fill="#CFE0EE" stroke="#6F8FA8" stroke-dasharray="4 2"/><text x="${X(f.x + f.w / 2)}" y="${Y(f.y + f.h) + 12}" text-anchor="middle" font-size="9.5" fill="#56707F">천창</text>`;
+      const rx = (x, y, w, h, fill, r, st) => `<rect x="${X(x).toFixed(1)}" y="${Y(y).toFixed(1)}" width="${(w * S).toFixed(1)}" height="${(h * S).toFixed(1)}" rx="${((r || 0.04) * S).toFixed(1)}" fill="${fill}" ${st ? `stroke="${st}" stroke-width="0.9"` : ''}/>`;
+      if (f.t === 'rect') { g += rx(f.x, f.y, f.w, f.h, f.c, f.r); if (f.l) g += T(f.x + f.w / 2, f.y + f.h / 2 + 0.06, f.l, 9.5, /^#[3-7]/.test(f.c) ? '#F3EBDD' : '#4A443C'); }
+      else if (f.t === 'txt') g += T(f.x, f.y, f.l, 9, '#7D766C', 0, f.rot);
+      else if (f.t === 'sofaV') g += rx(f.x, f.y, f.w, f.h, '#9E8F7D', 0.12) + rx(f.x + 0.22, f.y + 0.08, f.w - 0.3, f.h - 0.16, '#B7A895', 0.08);
+      else if (f.t === 'sofaS') g += rx(f.x, f.y, f.w, f.h, '#9E8F7D', 0.12) + rx(f.x + 0.08, f.y + 0.22, f.w - 0.16, f.h - 0.3, '#B7A895', 0.08);
+      else if (f.t === 'chair') g += rx(f.x, f.y, 0.75, 0.75, '#B7A895', 0.18);
+      else if (f.t === 'bedH') g += rx(f.x, f.y, f.w, f.h, '#F6F2EA', 0.05, '#A39B8E') + rx(f.x + 0.06, f.y + 0.1, 0.42, f.h - 0.2, '#DED5C8', 0.06) + rx(f.x + 0.75, f.y + 0.05, f.w - 0.8, f.h - 0.1, '#CDBCA3', 0.04);
+      else if (f.t === 'bedV') g += rx(f.x, f.y, f.w, f.h, '#F6F2EA', 0.05, '#A39B8E') + rx(f.x + 0.1, f.y + 0.06, f.w - 0.2, 0.42, '#DED5C8', 0.06) + rx(f.x + 0.05, f.y + 0.75, f.w - 0.1, f.h - 0.8, '#CDBCA3', 0.04);
+      else if (f.t === 'closet') { g += rx(f.x, f.y, f.w, f.h, '#E2D8C8', 0.02, '#A39B8E'); g += L(f.x, f.y, f.x + f.w, f.y + f.h, '#B5AB9C', 0.8) + L(f.x + f.w, f.y, f.x, f.y + f.h, '#B5AB9C', 0.8); g += T(f.x + f.w / 2, f.y + f.h / 2, '붙박이장', 9, '#6B645A', 0, 90); }
+      else if (f.t === 'wc') g += `<ellipse cx="${X(f.x + 0.2)}" cy="${Y(f.y + 0.42)}" rx="${0.18 * S}" ry="${0.25 * S}" fill="#FFFFFF" stroke="#8E999E"/>` + rx(f.x, f.y, 0.4, 0.16, '#FFFFFF', 0.03, '#8E999E');
+      else if (f.t === 'vanity') g += rx(f.x, f.y, f.w, f.h, '#FFFFFF', 0.04, '#8E999E') + `<ellipse cx="${X(f.x + f.w / 2)}" cy="${Y(f.y + f.h / 2)}" rx="${0.14 * S}" ry="${0.2 * S}" fill="none" stroke="#8E999E"/>`;
+      else if (f.t === 'shower') { g += rx(f.x, f.y, f.w, f.h, '#D5E2E9', 0.02, '#7E95A3'); g += L(f.x, f.y, f.x + f.w, f.y + f.h, '#9FB3BF', 0.7) + L(f.x + f.w, f.y, f.x, f.y + f.h, '#9FB3BF', 0.7) + T(f.x + f.w / 2, f.y + f.h / 2 + 0.06, '샤워', 9.5, '#56707F'); }
+      else if (f.t === 'washer') g += rx(f.x, f.y, 0.7, 0.7, '#FFFFFF', 0.06, '#8E999E') + `<circle cx="${X(f.x + 0.35)}" cy="${Y(f.y + 0.38)}" r="${0.22 * S}" fill="none" stroke="#8E999E"/>`;
+      else if (f.t === 'counter') { g += rx(f.x, f.y, f.w, f.h, '#C4BAAB', 0.03, '#9C9285'); g += rx(f.x + 0.35, f.y + 0.12, 0.55, 0.38, '#E8EEF1', 0.05, '#8E999E'); [1.55, 1.85].forEach(dx => [0.2, 0.42].forEach(dy => g += `<circle cx="${X(f.x + dx)}" cy="${Y(f.y + dy)}" r="${0.08 * S}" fill="none" stroke="#6B645A"/>`)); g += T(f.x + 2.3, f.y + 0.4, '주방', 9.5, '#4A443C'); }
+      else if (f.t === 'stool') f.xs.forEach(x => g += `<circle cx="${X(x)}" cy="${Y(f.y)}" r="${0.16 * S}" fill="#6B5A48"/>`);
+      else if (f.t === 'table') { g += rx(f.x, f.y, f.w, f.h, '#8A6A4C', 0.06); [0.3, 0.9, 1.5].forEach(dx => { g += `<circle cx="${X(f.x + dx)}" cy="${Y(f.y - 0.17)}" r="${0.14 * S}" fill="#B7A895"/><circle cx="${X(f.x + dx)}" cy="${Y(f.y + f.h + 0.17)}" r="${0.14 * S}" fill="#B7A895"/>`; }); }
+      else if (f.t === 'deckchair') g += rx(f.x, f.y, 0.75, 1.5, '#F6F2EA', 0.12, '#A39B8E') + rx(f.x + 0.05, f.y + 0.05, 0.65, 0.45, '#DED5C8', 0.1);
+      else if (f.t === 'sky') g += rx(f.x, f.y, f.w, f.h, '#D3E3EF', 0.01, '#6F8FA8') + T(f.x + f.w / 2, f.y + f.h / 2 + 0.06, '천창', 9.5, '#56707F');
     });
+    // 내부 벽 (각 실의 경계를 굵은 선으로)
+    P.rooms.filter(r => !r.terrace).forEach(r => { g += `<polygon points="${poly(r.pts)}" fill="none" stroke="${WALL}" stroke-width="4" stroke-linejoin="miter"/>`; });
     // 외벽
-    const bw = P.bodyW || W;
-    g += `<rect x="${X(0)}" y="${Y(0)}" width="${bw * S}" height="${D * S}" fill="none" stroke="#2E2A26" stroke-width="7"/>`;
-    // 창·문
+    g += `<rect x="${X(0)}" y="${Y(0)}" width="${bw * S}" height="${D * S}" fill="none" stroke="${WALL}" stroke-width="9"/>`;
+    if (bw < W) g += `<rect x="${X(bw)}" y="${Y(0)}" width="${(W - bw) * S}" height="${D * S}" fill="none" stroke="#9C9488" stroke-width="1.5"/>`;
+    // 트인 구간
+    (P.open || []).forEach(([x1, y1, x2, y2]) => g += L(x1 + (x1 === x2 ? 0 : 0.06), y1 + (y1 === y2 ? 0 : 0.06), x2 - (x1 === x2 ? 0 : 0.06), y2 - (y1 === y2 ? 0 : 0.06), FLOOR_GAP, 6));
+    // 창
     P.win.forEach(([x1, y1, x2, y2, t]) => {
-      const hz = y1 === y2;
-      g += `<line x1="${X(x1)}" y1="${Y(y1)}" x2="${X(x2)}" y2="${Y(y2)}" stroke="#FFFFFF" stroke-width="8"/>`;
-      if (t === 'd') g += `<line x1="${X(x1)}" y1="${Y(y1)}" x2="${X(x2)}" y2="${Y(y2)}" stroke="#8C6D45" stroke-width="4"/>`;
-      else {
-        const o = 2.2;
-        g += hz ? `<line x1="${X(x1)}" y1="${Y(y1) - o}" x2="${X(x2)}" y2="${Y(y2) - o}" stroke="#5B7C93" stroke-width="1.3"/><line x1="${X(x1)}" y1="${Y(y1) + o}" x2="${X(x2)}" y2="${Y(y2) + o}" stroke="#5B7C93" stroke-width="1.3"/>`
-          : `<line x1="${X(x1) - o}" y1="${Y(y1)}" x2="${X(x2) - o}" y2="${Y(y2)}" stroke="#5B7C93" stroke-width="1.3"/><line x1="${X(x1) + o}" y1="${Y(y1)}" x2="${X(x2) + o}" y2="${Y(y2)}" stroke="#5B7C93" stroke-width="1.3"/>`;
-        if (t === 's') g += hz ? `<line x1="${X((x1 + x2) / 2)}" y1="${Y(y1) - 4}" x2="${X((x1 + x2) / 2)}" y2="${Y(y1) + 4}" stroke="#5B7C93" stroke-width="1.3"/>` : `<line x1="${X(x1) - 4}" y1="${Y((y1 + y2) / 2)}" x2="${X(x1) + 4}" y2="${Y((y1 + y2) / 2)}" stroke="#5B7C93" stroke-width="1.3"/>`;
-      }
+      const hz = y1 === y2, o = 2.6;
+      g += L(x1, y1, x2, y2, '#FFFFFF', 10);
+      g += hz ? `<line x1="${X(x1)}" y1="${Y(y1) - o}" x2="${X(x2)}" y2="${Y(y2) - o}" stroke="#4F7189" stroke-width="1.4"/><line x1="${X(x1)}" y1="${Y(y1) + o}" x2="${X(x2)}" y2="${Y(y2) + o}" stroke="#4F7189" stroke-width="1.4"/><line x1="${X(x1)}" y1="${Y(y1)}" x2="${X(x2)}" y2="${Y(y2)}" stroke="#9DB4C4" stroke-width="0.8"/>`
+        : `<line x1="${X(x1) - o}" y1="${Y(y1)}" x2="${X(x2) - o}" y2="${Y(y2)}" stroke="#4F7189" stroke-width="1.4"/><line x1="${X(x1) + o}" y1="${Y(y1)}" x2="${X(x2) + o}" y2="${Y(y2)}" stroke="#4F7189" stroke-width="1.4"/><line x1="${X(x1)}" y1="${Y(y1)}" x2="${X(x2)}" y2="${Y(y2)}" stroke="#9DB4C4" stroke-width="0.8"/>`;
+      if (t === 's') { const mx = (x1 + x2) / 2, my = (y1 + y2) / 2; g += hz ? L(mx, y1 - 0.08, mx, y1 + 0.08, '#4F7189', 1.4) : L(x1 - 0.08, my, x1 + 0.08, my, '#4F7189', 1.4); }
     });
-    P.doors.forEach(([hx, hy, w, a0, sw]) => {
-      const rad = d => d * Math.PI / 180, a1 = a0 + sw;
-      const p1 = [hx + w * Math.cos(rad(a0)), hy + w * Math.sin(rad(a0))], p2 = [hx + w * Math.cos(rad(a1)), hy + w * Math.sin(rad(a1))];
-      g += `<line x1="${X(hx)}" y1="${Y(hy)}" x2="${X(p1[0])}" y2="${Y(p1[1])}" stroke="#FFFFFF" stroke-width="3"/>`;
-      g += `<line x1="${X(hx)}" y1="${Y(hy)}" x2="${X(p2[0])}" y2="${Y(p2[1])}" stroke="#6B645A" stroke-width="1.3"/><path d="M${X(p1[0])},${Y(p1[1])} A${w * S},${w * S} 0 0 ${sw > 0 ? 1 : 0} ${X(p2[0])},${Y(p2[1])}" fill="none" stroke="#A39B8E" stroke-width="0.9" stroke-dasharray="3 2"/>`;
+    // 문 (벽을 지우고 문짝 + 열림 호)
+    P.doors.forEach(([hx, hy, cx, cy, nx, ny, ext]) => {
+      const w = Math.hypot(cx - hx, cy - hy), ox = hx + nx * w, oy = hy + ny * w;
+      g += L(hx, hy, cx, cy, ext ? '#FFFFFF' : FLOOR_GAP, ext ? 10 : 6);
+      const cr = (cx - hx) * ny - (cy - hy) * nx; // 닫힘→열림 회전 방향
+      g += L(hx, hy, ox, oy, '#5A534A', 2);
+      g += `<path d="M${X(cx).toFixed(1)},${Y(cy).toFixed(1)} A${(w * S).toFixed(1)},${(w * S).toFixed(1)} 0 0 ${cr > 0 ? 1 : 0} ${X(ox).toFixed(1)},${Y(oy).toFixed(1)}" fill="none" stroke="#9C9488" stroke-width="0.9" stroke-dasharray="3 2"/>`;
+      if (ext) g += T((hx + cx) / 2, hy - 0.22, '현관문', 9.5, '#8C6D45', 700);
     });
     // 실명·면적
     P.rooms.forEach(r => {
+      if (r.stair) { const [x0, y0] = r.pts[0]; g += T(x0 + 1.05, y0 + 0.33, '계단', 11, '#2E2A26', 700); return; }
       const a = area(r.pts);
       const c = (P.label && P.label[r.n]) || [r.pts.reduce((s, p) => s + p[0], 0) / r.pts.length, r.pts.reduce((s, p) => s + p[1], 0) / r.pts.length];
-      const big = !r.small && a > 4;
-      g += `<text x="${X(c[0])}" y="${Y(c[1])}" text-anchor="middle" font-size="${big ? 13.5 : 11}" font-weight="700" fill="#2E2A26">${r.n}</text>`;
-      if (!r.stair) g += `<text x="${X(c[0])}" y="${Y(c[1]) + 14}" text-anchor="middle" font-size="10" fill="#7D766C">${r.areaText || f1(a) + '㎡ · ' + f1(a / PYC) + '평'}</text>`;
+      const big = !r.small && a > 5;
+      g += T(c[0], c[1], r.n, big ? 14 : 11.5, '#2E2A26', 700);
+      const bwid = Math.max(...r.pts.map(p => p[0])) - Math.min(...r.pts.map(p => p[0]));
+      g += T(c[0], c[1] + 0.27, r.areaText || (bwid < 1.8 ? f1(a / PYC) + '평' : f1(a) + '㎡ · ' + f1(a / PYC) + '평'), 10, '#7D766C');
     });
     // 치수
-    const dim = (x1, y1, x2, y2, t, vert) => vert
-      ? `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#8C6D45" stroke-width="0.9"/><line x1="${x1 - 4}" y1="${y1}" x2="${x1 + 4}" y2="${y1}" stroke="#8C6D45"/><line x1="${x1 - 4}" y1="${y2}" x2="${x1 + 4}" y2="${y2}" stroke="#8C6D45"/><text x="${x1 - 6}" y="${(y1 + y2) / 2}" font-size="10.5" fill="#8C6D45" text-anchor="middle" transform="rotate(-90 ${x1 - 6} ${(y1 + y2) / 2})">${t}</text>`
-      : `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#8C6D45" stroke-width="0.9"/><line x1="${x1}" y1="${y1 - 4}" x2="${x1}" y2="${y1 + 4}" stroke="#8C6D45"/><line x1="${x2}" y1="${y2 - 4}" x2="${x2}" y2="${y2 + 4}" stroke="#8C6D45"/><text x="${(x1 + x2) / 2}" y="${y1 - 5}" font-size="10.5" fill="#8C6D45" text-anchor="middle">${t}</text>`;
-    g += dim(X(0), Y(0) - 22, X(bw), Y(0) - 22, (bw * 1000).toLocaleString());
-    if (bw < W) g += dim(X(bw), Y(0) - 22, X(W), Y(0) - 22, ((W - bw) * 1000).toLocaleString());
-    g += dim(X(0) - 22, Y(0), X(0) - 22, Y(D), (D * 1000).toLocaleString(), 1);
+    const dimH = (x1, x2, y, t) => `<line x1="${X(x1)}" y1="${y}" x2="${X(x2)}" y2="${y}" stroke="#8C6D45" stroke-width="0.9"/><line x1="${X(x1)}" y1="${y - 5}" x2="${X(x1)}" y2="${y + 5}" stroke="#8C6D45"/><line x1="${X(x2)}" y1="${y - 5}" x2="${X(x2)}" y2="${y + 5}" stroke="#8C6D45"/><text x="${(X(x1) + X(x2)) / 2}" y="${y - 5}" font-size="10.5" fill="#8C6D45" text-anchor="middle">${t}</text>`;
+    const dimV = (y1, y2, x, t) => `<line x1="${x}" y1="${Y(y1)}" x2="${x}" y2="${Y(y2)}" stroke="#8C6D45" stroke-width="0.9"/><line x1="${x - 5}" y1="${Y(y1)}" x2="${x + 5}" y2="${Y(y1)}" stroke="#8C6D45"/><line x1="${x - 5}" y1="${Y(y2)}" x2="${x + 5}" y2="${Y(y2)}" stroke="#8C6D45"/><text x="${x - 6}" y="${(Y(y1) + Y(y2)) / 2}" font-size="10.5" fill="#8C6D45" text-anchor="middle" transform="rotate(-90 ${x - 6} ${(Y(y1) + Y(y2)) / 2})">${t}</text>`;
+    g += dimH(0, bw, Y(0) - 24, (bw * 1000).toLocaleString());
+    if (bw < W) g += dimH(bw, W, Y(0) - 24, ((W - bw) * 1000).toLocaleString());
+    g += dimV(0, D, X(0) - 24, (D * 1000).toLocaleString());
     // 방위·축척
-    const nx = vw - 34, ny = vh - 46;
-    g += `<g transform="translate(${nx},${ny})"><circle r="14" fill="none" stroke="#2E2A26" stroke-width="1"/><path d="M0,-12 L5,6 L0,2 L-5,6 Z" fill="#2E2A26"/><text y="-17" text-anchor="middle" font-size="10" font-weight="700" fill="#2E2A26">N</text></g>`;
-    g += `<g transform="translate(${pad},${vh - 20})"><rect width="${S}" height="5" fill="#2E2A26"/><rect x="${S}" width="${S}" height="5" fill="none" stroke="#2E2A26"/><rect x="${2 * S}" width="${S * 2}" height="5" fill="#2E2A26"/><text x="0" y="-4" font-size="9" fill="#7D766C">0</text><text x="${S * 4}" y="-4" font-size="9" fill="#7D766C">4m</text></g>`;
+    g += `<g transform="translate(${vw - 34},${vh - 46})"><circle r="14" fill="none" stroke="#2E2A26" stroke-width="1"/><path d="M0,-12 L5,6 L0,2 L-5,6 Z" fill="#2E2A26"/><text y="-17" text-anchor="middle" font-size="10" font-weight="700" fill="#2E2A26">N</text></g>`;
+    g += `<g transform="translate(${pad},${vh - 20})"><rect width="${S}" height="5" fill="#2E2A26"/><rect x="${S}" width="${S}" height="5" fill="none" stroke="#2E2A26"/><rect x="${2 * S}" width="${S * 2}" height="5" fill="#2E2A26"/><text x="0" y="-4" font-size="9" fill="#7D766C">0</text><text x="${S * 4}" y="-4" font-size="9" fill="#7D766C" text-anchor="middle">4m</text></g>`;
     return `<svg viewBox="0 0 ${vw} ${vh}" class="dz-svg" role="img" aria-label="${P.title}"><defs>${defs()}</defs><rect width="${vw}" height="${vh}" fill="#F7F3EC"/>${g}</svg>`;
   }
+
   function defs() {
     return `<marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#8C6D45"/></marker>
+      <pattern id="tile" width="14" height="14" patternUnits="userSpaceOnUse"><path d="M14,0 L0,0 0,14" fill="none" stroke="#B9C3C8" stroke-width=".7"/></pattern>
       <pattern id="hatch" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="7" stroke="#A39B8E" stroke-width="1.2"/></pattern>
       <pattern id="stone" width="46" height="18" patternUnits="userSpaceOnUse"><rect width="46" height="18" fill="#3E4147"/><rect x="1" y="1" width="27" height="7" fill="#4A4D54"/><rect x="30" y="1" width="15" height="7" fill="#45484F"/><rect x="1" y="10" width="13" height="7" fill="#46494F"/><rect x="16" y="10" width="29" height="7" fill="#4C4F56"/></pattern>
       <pattern id="stoneL" width="30" height="12" patternUnits="userSpaceOnUse"><rect width="30" height="12" fill="#8E9095"/><rect x=".5" y=".5" width="18" height="5" fill="#9A9CA1"/><rect x="19.5" y=".5" width="10" height="5" fill="#94969B"/><rect x=".5" y="6.5" width="9" height="5" fill="#96989D"/><rect x="10.5" y="6.5" width="19" height="5" fill="#A0A2A7"/></pattern>
@@ -203,22 +237,22 @@
       for (let x = -0.1; x < 8.3; x += 0.45) g += `<line x1="${X(x)}" y1="${Z(6.28)}" x2="${X(x)}" y2="${Z(Hh.ridge + 0.15)}" stroke="#3A3F46" stroke-width="0.9"/>`;
       g += rect(1.4, 7.4, 2.4, 8.4, '#5D7891', '#1D2024') + rect(5.0, 7.4, 6.0, 8.4, '#5D7891', '#1D2024');   // 천창
       // 창
-      g += win(0.3, Hh.fl1, 4.0, 2.9, 4) + win(6.2, 0.9, 9.2, 2.6, 3) + win(4.5, 1.6, 5.4, 2.5, 1);
+      g += win(0.3, Hh.fl1, 4.0, 2.9, 4) + win(4.8, 0.9, 7.4, 2.6, 3) + win(8.3, 1.7, 9.3, 2.6, 1);
       g += win(0.4, 3.7, 3.6, 6.2, 3) + win(4.6, 4.0, 7.6, 6.2, 3);
       g += rect(3.75, 3.7, 4.45, 6.2, '#A9784E', '#6B4A30'); for (let x = 3.83; x < 4.45; x += 0.12) g += `<line x1="${X(x)}" y1="${Z(6.2)}" x2="${X(x)}" y2="${Z(3.7)}" stroke="#7E5636" stroke-width="1.4"/>`;
       // 테라스 유리 난간
       g += `<rect x="${X(8.0)}" y="${Z(4.4)}" width="${1.6 * S}" height="${1.1 * S}" fill="#BFD0DD" opacity=".55" stroke="#2E2A26"/>`;
       // 데크
       g += rect(-0.8, 0, 6.2, Hh.fl1, '#A88664', '#6B4A30');
-      [4.2, 5.8, 9.45].forEach(x => g += `<circle cx="${X(x)}" cy="${Z(2.7)}" r="10" fill="url(#lamp)"/><rect x="${X(x) - 2}" y="${Z(2.75)}" width="4" height="7" fill="#2E2A26"/>`);
+      [4.4, 7.85, 9.45].forEach(x => g += `<circle cx="${X(x)}" cy="${Z(2.7)}" r="10" fill="url(#lamp)"/><rect x="${X(x) - 2}" y="${Z(2.75)}" width="4" height="7" fill="#2E2A26"/>`);
       // 높이 치수
-      g += levels(X(9.6) + 18, Z, [`1FL +${Hh.fl1} (GL+0.3)`, `2FL +${Hh.fl2}`, `다락 +${Hh.fl3}`, `최고 +${Hh.ridge}`], [Hh.fl1, Hh.fl2, Hh.fl3, Hh.ridge]);
+      g += levels(X(9.6) + 18, Z, [`1FL +${Hh.fl1}`, `2FL +${Hh.fl2}`, `다락 +${Hh.fl3}`, `최고 +${Hh.ridge}`], [Hh.fl1, Hh.fl2, Hh.fl3, Hh.ridge]);
     } else { // 서측 (박공면) — 왼쪽이 북, 오른쪽이 남
       g += rect(0, 0, 6.2, Hh.fl2, 'url(#stoneL)');
       g += rect(-0.1, Hh.fl2 - 0.25, 6.3, Hh.fl2, '#2E2A26');
       g += `<polygon points="${X(0)},${Z(Hh.fl2)} ${X(6.2)},${Z(Hh.fl2)} ${X(6.2)},${Z(Hh.eave)} ${X(3.1)},${Z(Hh.ridge)} ${X(0)},${Z(Hh.eave)}" fill="#FBFAF7" stroke="#2E2A26" stroke-width="1.2"/>`;
       g += `<polyline points="${X(-0.4)},${Z(6.24)} ${X(3.1)},${Z(Hh.ridge + 0.22)} ${X(6.6)},${Z(6.24)}" fill="none" stroke="#1D2024" stroke-width="7" stroke-linejoin="miter"/>`;
-      g += win(1.4, 0.9, 5.0, 2.6, 3) + win(3.4, 3.8, 5.8, 6.0, 2) + win(0.6, 4.6, 1.6, 5.6, 1) + win(2.5, 6.9, 3.7, 8.4, 1);
+      g += win(1.0, 0.9, 5.0, 2.6, 3) + win(3.2, 3.8, 5.8, 6.0, 2) + win(0.6, 4.6, 1.6, 5.6, 1) + win(2.5, 6.9, 3.7, 8.4, 1);
       g += rect(5.95, 0, 7.6, Hh.fl1, '#A88664', '#6B4A30');
       g += levels(X(6.6) + 22, Z, ['GL ±0', `2FL +${Hh.fl2}`, `처마 +${Hh.eave}`, `최고 +${Hh.ridge}`], [0, Hh.fl2, Hh.eave, Hh.ridge]);
       g += `<text x="${X(0)}" y="${Z(0) + 16}" font-size="10" fill="#7D766C">북</text><text x="${X(6.2)}" y="${Z(0) + 16}" font-size="10" fill="#7D766C" text-anchor="end">남</text>`;
@@ -265,7 +299,7 @@
     // 데크
     g += `<rect x="${X(6.45)}" y="${Z(Hh.fl1)}" width="${2.6 * S}" height="${Hh.fl1 * S}" fill="#A88664"/><text x="${X(7.75)}" y="${Z(Hh.fl1) - 6}" text-anchor="middle" font-size="10" fill="#6B4A30">데크</text>`;
     // 레벨
-    g += levels(X(9.4), Z, [`1FL +${Hh.fl1} (GL+0.3)`, `2FL +${Hh.fl2}`, `다락 +${Hh.fl3}`, `최고 +${Hh.ridge}`], [Hh.fl1, Hh.fl2, Hh.fl3, Hh.ridge]);
+    g += levels(X(9.4), Z, [`1FL +${Hh.fl1}`, `2FL +${Hh.fl2}`, `다락 +${Hh.fl3}`, `최고 +${Hh.ridge}`], [Hh.fl1, Hh.fl2, Hh.fl3, Hh.ridge]);
     g += `<text x="${X(0)}" y="${vh - 10}" font-size="10" fill="#7D766C">북</text><text x="${X(6.2)}" y="${vh - 10}" font-size="10" fill="#7D766C" text-anchor="end">남 (정원·조망)</text>`;
     return `<svg viewBox="0 0 ${vw} ${vh}" class="dz-svg"><defs>${defs()}</defs>${g}</svg>`;
   }
@@ -322,20 +356,20 @@
     g += ln(rp(-0.4, 0), rp(8.4, 0), '#111316', 5);
     // 창 — 1층
     g += sq(0.3, 0.3, 4.0, 2.9, 6.21, WIN) + mull(0.3, 0.3, 4.0, 2.9, 6.21, 4);
-    g += sq(6.2, 0.9, 9.2, 2.6, 6.21, WIN) + mull(6.2, 0.9, 9.2, 2.6, 6.21, 3);
-    g += sq(4.5, 1.6, 5.4, 2.5, 6.21, night ? '#C79A62' : 'url(#glassX)');
-    g += wq(1.2, 0.9, 4.8, 2.6, -0.01, WIN);
+    g += sq(4.8, 0.9, 7.4, 2.6, 6.21, WIN) + mull(4.8, 0.9, 7.4, 2.6, 6.21, 3);
+    g += sq(8.3, 1.7, 9.3, 2.6, 6.21, night ? '#C79A62' : 'url(#glassX)');
+    g += wq(1.0, 0.9, 5.0, 2.6, -0.01, WIN);
     // 창 — 2층
     g += sq(0.4, 3.7, 3.6, 6.2, 6.21, WIN) + mull(0.4, 3.7, 3.6, 6.2, 6.21, 3);
     g += sq(4.6, 4.0, 7.6, 6.2, 6.21, WIN) + mull(4.6, 4.0, 7.6, 6.2, 6.21, 3);
     g += sq(3.75, 3.7, 4.45, 6.2, 6.215, '#9A6B45'); for (let x = 3.8; x < 4.45; x += 0.11) g += ln([x, 6.22, 3.7], [x, 6.22, 6.2], '#6E4A2E', 1.6);
-    g += wq(3.4, 3.8, 5.8, 6.0, -0.01, WIN) + wq(0.6, 4.6, 1.6, 5.6, -0.01, WIN);
+    g += wq(3.2, 3.8, 5.8, 6.0, -0.01, WIN) + wq(0.6, 4.6, 1.6, 5.6, -0.01, WIN);
     g += wq(2.5, 6.9, 3.7, 8.4, -0.01, WIN);
     // 테라스 유리 난간
     g += pg([[8.0, 6.2, 3.3], [9.6, 6.2, 3.3], [9.6, 6.2, 4.4], [8.0, 6.2, 4.4]], '#B8CCDA', 'opacity=".35"') + ln([8.0, 6.2, 4.4], [9.6, 6.2, 4.4], '#1E2125', 2);
     // 조명
     if (night) {
-      [[4.2, 6.25, 2.7], [5.8, 6.25, 2.7], [9.45, 6.25, 2.7], [-0.05, 0.5, 2.7], [-0.05, 5.5, 2.7]].forEach(p => { const q = P(p); g += `<circle cx="${q[0]}" cy="${q[1] + 16}" r="46" fill="url(#lampX)"/><rect x="${q[0] - 3}" y="${q[1] - 4}" width="6" height="12" fill="#111316"/>`; });
+      [[4.4, 6.25, 2.7], [7.85, 6.25, 2.7], [9.45, 6.25, 2.7], [-0.05, 0.5, 2.7], [-0.05, 5.5, 2.7]].forEach(p => { const q = P(p); g += `<circle cx="${q[0]}" cy="${q[1] + 16}" r="46" fill="url(#lampX)"/><rect x="${q[0] - 3}" y="${q[1] - 4}" width="6" height="12" fill="#111316"/>`; });
       [[0.3, 6.25, 0.3], [4.0, 6.25, 0.3]].forEach(p => { const q = P(p); g += `<ellipse cx="${q[0]}" cy="${q[1] + 4}" rx="90" ry="16" fill="url(#lampX)" opacity=".6"/>`; });
       [[-1.6, 9.6, 0], [3.0, 9.8, 0], [7.4, 9.4, 0]].forEach(p => { const q = P(p); g += `<rect x="${q[0] - 3}" y="${q[1] - 26}" width="6" height="26" fill="#2A2D31"/><circle cx="${q[0]}" cy="${q[1] - 26}" r="20" fill="url(#lampX)"/>`; });
     }
@@ -459,13 +493,13 @@
         <div class="dz-card"><div class="dz-ic">🍷</div><b>PRIVATE ENTERTAINMENT</b><span>1층 8평 파티룸 — 와인셀러 월과 바 아일랜드, 시네마 스크린, 데크로 열리는 3.7m 슬라이딩 도어</span></div>
         <div class="dz-card"><div class="dz-ic">🏞️</div><b>PANORAMA LDK</b><span>2층 10.8평 대면형 LDK — 아일랜드에서 거실과 남측 산 조망을 마주하고, 동측 3평 테라스로 이어지는 동선</span></div>
         <div class="dz-card"><div class="dz-ic">✨</div><b>ATTIC BEDROOM</b><span>박공 아래 다락 침실 — 천창으로 별을 보며 잠드는 공간, 양쪽 박공창으로 맞통풍</span></div>
-        <div class="dz-card"><div class="dz-ic">🛏️</div><b>GUEST SUITE</b><span>1층 침실·욕실·세탁실 — 파티가 끝나도 서로 방해 없는 게스트 동선, 정원 쪽 세탁실 창</span></div>
+        <div class="dz-card"><div class="dz-ic">🛏️</div><b>GUEST SUITE</b><span>1층 남향 침실과 욕실 — 일자 복도로 파티룸과 분리돼 파티가 끝나도 서로 방해 없는 게스트 동선</span></div>
       </div>`)}
 
       ${sec('02', 'EXTERIOR', '외관 투시도', `<div class="dz-ext2">${exteriorSVG('day')}</div><div class="dz-cap">석재 1층 · 화이트 2층 · 블랙 징크 박공지붕 · 우드 루버 포인트 — 낮의 표정</div>`)}
 
       ${sec('03', 'FLOOR PLAN', '평면도', `<div class="dz-plans">
-        <figure>${planSVG('f1')}<figcaption><b>1F</b> 파티룸 · 게스트 침실 · 욕실 · 세탁실 · 현관 — ${f1(a1 / PYC)}평</figcaption></figure>
+        <figure>${planSVG('f1')}<figcaption><b>1F</b> 현관 → 복도 → 파티룸 축 · 남향 게스트 침실 · 욕실 · 세탁실 — ${f1(a1 / PYC)}평</figcaption></figure>
         <figure>${planSVG('f2')}<figcaption><b>2F</b> 대면형 LDK · 욕실 · 다용도실 + 테라스 3평 — ${f1(a2 / PYC)}평</figcaption></figure>
         <figure>${planSVG('f3')}<figcaption><b>ATTIC</b> 다락 침실 · 천창 2개 · 박공창 2개 — 유효 약 ${f1(att / PYC)}평</figcaption></figure>
       </div>`, 'dz-paper')}
